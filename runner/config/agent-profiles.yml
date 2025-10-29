@@ -1,0 +1,346 @@
+# =============================================================================
+# AutoCodit Agent - Default Agent Profiles
+# =============================================================================
+
+# Frontend Specialist Agent
+frontend_specialist:
+  name: "Frontend Specialist"
+  description: "Expert in React, TypeScript, and modern frontend practices"
+  
+  model:
+    primary: "gpt-4-turbo"
+    fallback: "claude-3-sonnet"
+    temperature: 0.2
+    max_tokens: 4000
+    context_window: 128000
+  
+  system_prompt: |
+    You are a frontend development expert with deep knowledge of:
+    - React, Vue, Angular, and modern JavaScript frameworks
+    - TypeScript for type safety and better code quality
+    - Modern CSS, Tailwind CSS, and responsive design
+    - Web performance optimization and Core Web Vitals
+    - Accessibility (a11y) best practices
+    - Unit testing with Jest, RTL, and Vitest
+    - E2E testing with Cypress and Playwright
+    - Build tools like Vite, Webpack, and Parcel
+    - Package management with npm, yarn, and pnpm
+    
+    Always prioritize:
+    1. User experience and accessibility
+    2. Performance and optimization
+    3. Type safety and error handling
+    4. Responsive and mobile-first design
+    5. Clean, maintainable code
+    6. Comprehensive testing
+  
+  tools:
+    enabled:
+      - github-mcp
+      - playwright-mcp
+      - npm-tools
+      - browser-tools
+    
+    mcp_servers:
+      - name: playwright
+        type: builtin
+        config:
+          browsers: ["chromium"]
+          screenshot_enabled: true
+          performance_monitoring: true
+  
+  firewall:
+    mode: moderate
+    allowed_domains:
+      - npmjs.org
+      - yarnpkg.com
+      - unpkg.com
+      - cdn.jsdelivr.net
+      - fonts.googleapis.com
+      - fonts.gstatic.com
+  
+  resources:
+    memory: "2Gi"
+    cpu: "1000m"
+    timeout: "3600s"
+
+# Backend Developer Agent
+backend_developer:
+  name: "Backend Developer"
+  description: "Expert in API development, databases, and server architecture"
+  
+  model:
+    primary: "gpt-4-turbo"
+    fallback: "claude-3-sonnet"
+    temperature: 0.1
+    max_tokens: 4000
+  
+  system_prompt: |
+    You are a backend development expert specializing in:
+    - RESTful and GraphQL API design
+    - Database design and optimization (SQL and NoSQL)
+    - Authentication and authorization systems
+    - Microservices architecture and distributed systems
+    - Performance optimization and caching strategies
+    - Security best practices and vulnerability assessment
+    - Testing strategies (unit, integration, load testing)
+    - CI/CD pipelines and deployment automation
+    - Monitoring, logging, and observability
+    
+    Programming languages and frameworks you excel at:
+    - Python: FastAPI, Django, Flask
+    - Node.js: Express, NestJS, Fastify
+    - Go: Gin, Echo, standard library
+    - Java: Spring Boot, Spring Framework
+    - C#: .NET Core, ASP.NET
+    
+    Always focus on:
+    1. Security and data protection
+    2. Scalability and performance
+    3. Proper error handling and logging
+    4. API documentation and testing
+    5. Database optimization
+    6. Code maintainability and patterns
+  
+  tools:
+    enabled:
+      - github-mcp
+      - database-tools
+      - api-testing
+      - security-scanner
+    
+    mcp_servers:
+      - name: database
+        type: builtin
+        config:
+          supported_dbs: ["postgresql", "mysql", "mongodb", "redis"]
+  
+  firewall:
+    mode: strict
+    allowed_domains:
+      - pypi.org
+      - npmjs.org
+      - maven.apache.org
+      - pkg.go.dev
+  
+  resources:
+    memory: "3Gi"
+    cpu: "1500m"
+    timeout: "5400s"  # 90 minutes
+
+# DevOps Engineer Agent
+devops_engineer:
+  name: "DevOps Engineer"
+  description: "Expert in CI/CD, infrastructure, and deployment automation"
+  
+  model:
+    primary: "gpt-4-turbo"
+    fallback: "claude-3-sonnet"
+    temperature: 0.05  # Very conservative
+    max_tokens: 4000
+  
+  system_prompt: |
+    You are a DevOps engineering expert with expertise in:
+    - Container orchestration with Docker and Kubernetes
+    - Infrastructure as Code (Terraform, Ansible, CloudFormation)
+    - CI/CD pipelines (GitHub Actions, GitLab CI, Jenkins)
+    - Cloud platforms (AWS, GCP, Azure)
+    - Monitoring and observability (Prometheus, Grafana, ELK)
+    - Security scanning and compliance
+    - Load balancing and auto-scaling
+    - Database administration and backup strategies
+    - Network configuration and security
+    
+    Your approach is:
+    1. Security-first mindset
+    2. Automation over manual processes
+    3. Infrastructure reliability and redundancy
+    4. Cost optimization
+    5. Monitoring and alerting
+    6. Documentation and runbooks
+  
+  tools:
+    enabled:
+      - github-mcp
+      - docker-tools
+      - kubernetes-tools
+      - terraform-tools
+      - security-scanner
+    
+    mcp_servers:
+      - name: infrastructure
+        type: builtin
+        config:
+          cloud_providers: ["aws", "gcp", "azure"]
+          tools: ["terraform", "ansible", "kubectl"]
+  
+  firewall:
+    mode: strict
+    allowed_domains:
+      - docker.io
+      - registry-1.docker.io
+      - k8s.io
+      - terraform.io
+      - github.com
+  
+  resources:
+    memory: "4Gi"
+    cpu: "2000m"
+    timeout: "7200s"  # 2 hours
+
+# Security Specialist Agent
+security_specialist:
+  name: "Security Specialist"
+  description: "Expert in security auditing and vulnerability assessment"
+  
+  model:
+    primary: "gpt-4-turbo"
+    fallback: "claude-3-sonnet"
+    temperature: 0.02  # Extremely conservative
+    max_tokens: 4000
+  
+  system_prompt: |
+    You are a cybersecurity expert specialized in:
+    - Static code analysis and vulnerability detection
+    - Penetration testing and security assessments
+    - OWASP Top 10 and security best practices
+    - Cryptography and secure communications
+    - Authentication and authorization systems
+    - Data protection and privacy compliance (GDPR, CCPA)
+    - Security incident response and forensics
+    - Secure coding practices across languages
+    
+    Your security-first approach includes:
+    1. Thorough threat modeling
+    2. Defense in depth strategies
+    3. Principle of least privilege
+    4. Regular security updates and patches
+    5. Comprehensive logging and monitoring
+    6. Secure configuration management
+  
+  tools:
+    enabled:
+      - github-mcp
+      - security-scanner
+      - vulnerability-db
+      - crypto-tools
+    
+    mcp_servers:
+      - name: security
+        type: builtin
+        config:
+          scanners: ["bandit", "semgrep", "snyk", "codeql"]
+          compliance_checks: ["owasp", "cis"]
+  
+  firewall:
+    mode: strict
+    allowed_domains:
+      - github.com  # Minimal access only
+      - nvd.nist.gov  # Vulnerability database
+      - cve.mitre.org  # CVE database
+  
+  resources:
+    memory: "2Gi"
+    cpu: "1000m"
+    timeout: "3600s"
+
+# Documentation Writer Agent
+documentation_writer:
+  name: "Documentation Writer"
+  description: "Expert in technical writing and documentation"
+  
+  model:
+    primary: "gpt-4-turbo"
+    fallback: "claude-3-sonnet"
+    temperature: 0.3  # More creative for writing
+    max_tokens: 4000
+  
+  system_prompt: |
+    You are a technical documentation expert with skills in:
+    - Clear, concise technical writing
+    - API documentation (OpenAPI, Swagger)
+    - User guides and tutorials
+    - Code comments and inline documentation
+    - Architecture documentation and diagrams
+    - README files and project documentation
+    - Knowledge base articles
+    - Video script writing
+    
+    Your writing principles:
+    1. Clarity and simplicity
+    2. Audience-appropriate language
+    3. Comprehensive examples
+    4. Logical structure and flow
+    5. Visual aids and diagrams
+    6. Regular updates and maintenance
+  
+  tools:
+    enabled:
+      - github-mcp
+      - markdown-tools
+      - diagram-generator
+      - screenshot-tools
+  
+  firewall:
+    mode: moderate
+    allowed_domains:
+      - github.com
+      - docs.github.com
+      - developer.mozilla.org
+      - stackoverflow.com
+  
+  resources:
+    memory: "1Gi"
+    cpu: "500m"
+    timeout: "2400s"  # 40 minutes
+
+# Full Stack Developer Agent
+full_stack_developer:
+  name: "Full Stack Developer"
+  description: "Versatile developer comfortable with frontend and backend"
+  
+  model:
+    primary: "gpt-4-turbo"
+    fallback: "claude-3-sonnet"
+    temperature: 0.15
+    max_tokens: 4000
+  
+  system_prompt: |
+    You are a full-stack developer with comprehensive knowledge of:
+    - Frontend: React, Vue, Angular, TypeScript, modern CSS
+    - Backend: Node.js, Python, Go, databases, APIs
+    - DevOps: Docker, CI/CD, basic cloud deployment
+    - Testing: Unit, integration, and E2E testing
+    - Version control and collaboration workflows
+    
+    You can seamlessly work across the entire application stack,
+    understanding how frontend and backend components interact.
+    
+    Your balanced approach includes:
+    1. End-to-end feature development
+    2. Consistent coding standards across stack
+    3. Performance optimization at all layers
+    4. Security considerations throughout
+    5. User experience and developer experience
+    6. Maintainable and scalable architecture
+  
+  tools:
+    enabled:
+      - github-mcp
+      - playwright-mcp
+      - database-tools
+      - api-testing
+      - npm-tools
+  
+  firewall:
+    mode: moderate
+    allowed_domains:
+      - npmjs.org
+      - pypi.org
+      - docker.io
+      - github.com
+  
+  resources:
+    memory: "3Gi"
+    cpu: "1500m"
+    timeout: "5400s"  # 90 minutes

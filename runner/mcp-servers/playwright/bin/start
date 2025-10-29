@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# =============================================================================
+# Playwright MCP Server Starter
+# =============================================================================
+
+set -euo pipefail
+
+MCP_SERVER_PORT=${MCP_SERVER_PORT:-2302}
+LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+echo "Starting Playwright MCP Server on port $MCP_SERVER_PORT"
+
+# Install playwright browsers if not already installed
+if [ ! -d "/home/agent/.cache/ms-playwright" ]; then
+    echo "Installing Playwright browsers..."
+    npx playwright install chromium --with-deps
+fi
+
+# Start the Playwright MCP server
+exec node /usr/local/lib/mcp-servers/playwright/server.js

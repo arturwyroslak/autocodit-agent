@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# =============================================================================
+# GitHub MCP Server Starter
+# =============================================================================
+
+set -euo pipefail
+
+MCP_SERVER_PORT=${MCP_SERVER_PORT:-2301}
+LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+echo "Starting GitHub MCP Server on port $MCP_SERVER_PORT"
+
+# Start the GitHub MCP server
+exec node /usr/local/lib/mcp-servers/github/server.js

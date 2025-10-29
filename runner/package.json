@@ -1,0 +1,29 @@
+{
+  "name": "autocodit-agent-runner",
+  "version": "1.0.0",
+  "description": "AutoCodit Agent container runner with MCP integration",
+  "main": "lib/agent-main.js",
+  "scripts": {
+    "start": "node lib/agent-main.js",
+    "health": "node lib/health-server.js",
+    "detect": "node lib/project-detector.js",
+    "test": "echo \"No tests specified\" && exit 1"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "octokit": "^3.1.0",
+    "node-fetch": "^3.3.2",
+    "playwright": "^1.40.0",
+    "typescript": "^5.2.0",
+    "@types/node": "^20.8.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "Artur Wyroslak",
+  "license": "Apache-2.0"
+}

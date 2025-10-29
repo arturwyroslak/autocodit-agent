@@ -1,0 +1,95 @@
+#!/bin/bash
+
+# =============================================================================
+# AutoCodit Agent Executor
+# Main entry point for container-based task execution
+# =============================================================================
+
+set -euo pipefail
+
+# Configuration from environment
+TASK_ID="${TASK_ID:-}"
+SESSION_ID="${SESSION_ID:-}"
+REPOSITORY_URL="${REPOSITORY_URL:-}"
+TASK_DESCRIPTION="${TASK_DESCRIPTION:-}"
+ACTION_TYPE="${ACTION_TYPE:-plan}"
+AGENT_CONFIG="${AGENT_CONFIG:-{}}"
+API_ENDPOINT="${API_ENDPOINT:-}"
+GITHUB_INSTALLATION_ID="${GITHUB_INSTALLATION_ID:-}"
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+
+# Logging function
+log() {
+    local level=$1
+    shift
+    echo "{\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"level\": \"$level\", \"component\": \"agent-executor\", \"message\": \"$*\", \"task_id\": \"$TASK_ID\", \"session_id\": \"$SESSION_ID\"}"
+}
+
+# Error handler
+error_exit() {
+    log "ERROR" "$1"
+    exit 1
+}
+
+# Signal handlers for graceful shutdown
+trap 'log "INFO" "Received SIGTERM, shutting down gracefully"; exit 0' TERM
+trap 'log "INFO" "Received SIGINT, shutting down gracefully"; exit 0' INT
+
+# Validate required environment variables
+[ -z "$TASK_ID" ] && error_exit "TASK_ID is required"
+[ -z "$SESSION_ID" ] && error_exit "SESSION_ID is required"
+[ -z "$REPOSITORY_URL" ] && error_exit "REPOSITORY_URL is required"
+[ -z "$API_ENDPOINT" ] && error_exit "API_ENDPOINT is required"
+
+log "INFO" "Starting AutoCodit Agent Executor" 
+
+# Create workspace structure
+mkdir -p /workspace/{repo,cache,artifacts,logs}
+cd /workspace
+
+# Start health check endpoint
+log "INFO" "Starting health check endpoint"
+node /usr/local/lib/health-server.js &
+HEALTH_PID=$!
+
+# Clone repository
+log "INFO" "Cloning repository: $REPOSITORY_URL"
+if ! git clone "$REPOSITORY_URL" repo; then
+    error_exit "Failed to clone repository"
+fi
+
+cd repo
+
+# Detect project type and setup environment
+log "INFO" "Detecting project structure"
+node /usr/local/lib/project-detector.js > /workspace/project-info.json
+
+PROJECT_TYPE=$(cat /workspace/project-info.json | jq -r '.type')
+log "INFO" "Detected project type: $PROJECT_TYPE"
+
+# Start MCP servers based on project type
+log "INFO" "Starting MCP servers"
+/usr/local/lib/mcp-servers/github/bin/start &
+GITHUB_MCP_PID=$!
+
+if [ "$PROJECT_TYPE" = "web" ] || [ "$PROJECT_TYPE" = "frontend" ]; then
+    /usr/local/lib/mcp-servers/playwright/bin/start &
+    PLAYWRIGHT_MCP_PID=$!
+fi
+
+# Wait for MCP servers to start
+sleep 3
+
+# Start main agent process
+log "INFO" "Starting main agent process"
+exec node /usr/local/lib/agent-main.js
+
+# Cleanup on exit (this won't run due to exec, but kept for reference)
+cleanup() {
+    log "INFO" "Cleaning up processes"
+    [ -n "${GITHUB_MCP_PID:-}" ] && kill $GITHUB_MCP_PID 2>/dev/null || true
+    [ -n "${PLAYWRIGHT_MCP_PID:-}" ] && kill $PLAYWRIGHT_MCP_PID 2>/dev/null || true
+    [ -n "${HEALTH_PID:-}" ] && kill $HEALTH_PID 2>/dev/null || true
+}
+
+trap cleanup EXIT

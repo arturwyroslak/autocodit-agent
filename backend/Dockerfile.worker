@@ -1,0 +1,67 @@
+# =============================================================================
+# AutoCodit Agent Worker - Dockerfile for Celery Workers
+# =============================================================================
+
+# Use same base as main API
+FROM python:3.11-slim-bullseye as base
+
+# Install system dependencies including Docker
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        git \
+        libpq-dev \
+        pkg-config \
+        ca-certificates \
+        lsb-release \
+        gnupg \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Development stage
+FROM base as development
+
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+# Copy application code
+COPY . .
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV C_FORCE_ROOT=1
+
+# Development command (overridden in docker-compose)
+CMD ["celery", "-A", "workers.celery_app", "worker", "--loglevel=debug"]
+
+# Production stage
+FROM base as production
+
+# Create non-root user
+RUN groupadd -r celery && useradd -r -g celery celery
+
+# Copy application code
+COPY --chown=celery:celery . .
+
+# Switch to non-root user for security
+# Note: Worker needs access to Docker socket, so this might need adjustment
+USER celery
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV C_FORCE_ROOT=1
+
+# Production command
+CMD ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info", "--concurrency=4"]

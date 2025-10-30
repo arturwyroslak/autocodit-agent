@@ -1,277 +1,198 @@
 """
 AutoCodit Agent - Task Schemas
 
-Pydantic models for task-related API requests and responses.
+Pydantic models for task-related API operations.
 """
 
 from datetime import datetime
-from typing import Dict, Any, List, Optional
-from uuid import UUID
-
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field, validator
 
 from app.models.task import TaskStatus, TaskPriority, ActionType
 
 
-class CreateTaskRequest(BaseModel):
+class TaskBase(BaseModel):
+    """Base task schema"""
+    title: str = Field(..., min_length=1, max_length=500, description="Task title")
+    description: Optional[str] = Field(None, description="Task description")
+    repository: str = Field(..., description="Repository full name (owner/repo)")
+    action_type: ActionType = Field(ActionType.PLAN, description="Type of action to perform")
+    priority: TaskPriority = Field(TaskPriority.NORMAL, description="Task priority")
+    agent_config: Dict[str, Any] = Field(default_factory=dict, description="Agent configuration")
+    timeout_minutes: int = Field(60, ge=1, le=480, description="Task timeout in minutes")
+    
+    @validator("repository")
+    def validate_repository(cls, v):
+        if "/" not in v:
+            raise ValueError("Repository must be in format 'owner/repo'")
+        parts = v.split("/")
+        if len(parts) != 2 or not all(parts):
+            raise ValueError("Repository must be in format 'owner/repo'")
+        return v
+
+
+class CreateTaskRequest(TaskBase):
     """Request to create a new task"""
-    title: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=10000)
-    repository: str = Field(..., min_length=1, max_length=255)
-    issue_number: Optional[int] = Field(None, ge=1)
-    pr_number: Optional[int] = Field(None, ge=1)
-    comment_id: Optional[str] = Field(None, max_length=50)
-    action_type: ActionType = Field(default=ActionType.PLAN)
-    priority: TaskPriority = Field(default=TaskPriority.NORMAL)
-    agent_config: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    github_installation_id: Optional[int] = Field(None, ge=1)
+    issue_number: Optional[int] = Field(None, description="GitHub issue number")
+    pr_number: Optional[int] = Field(None, description="GitHub PR number")
+    comment_id: Optional[str] = Field(None, description="GitHub comment ID")
+    branch_name: Optional[str] = Field(None, description="Target branch name")
+    github_installation_id: Optional[int] = Field(None, description="GitHub App installation ID")
+    triggered_by: Optional[str] = Field(None, description="How the task was triggered")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "title": "Fix authentication bug",
-                "description": "There's a bug in the JWT token validation that allows expired tokens to pass through",
-                "repository": "myorg/myapp",
-                "issue_number": 123,
+                "description": "Fix the JWT token validation issue in the auth module",
+                "repository": "myorg/myrepo",
                 "action_type": "fix",
                 "priority": "high",
+                "issue_number": 123,
+                "timeout_minutes": 120,
                 "agent_config": {
                     "model": "gpt-4-turbo",
                     "temperature": 0.1,
-                    "max_tokens": 4000
-                },
-                "github_installation_id": 12345
+                    "tools": ["github-mcp", "test-runner"]
+                }
             }
         }
 
 
 class UpdateTaskRequest(BaseModel):
     """Request to update a task"""
-    title: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=10000)
+    title: Optional[str] = Field(None, min_length=1, max_length=500)
+    description: Optional[str] = None
     priority: Optional[TaskPriority] = None
     agent_config: Optional[Dict[str, Any]] = None
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "title": "Fix authentication and add tests",
-                "priority": "urgent",
-                "agent_config": {
-                    "include_tests": True,
-                    "test_framework": "pytest"
-                }
-            }
-        }
+    timeout_minutes: Optional[int] = Field(None, ge=1, le=480)
 
 
 class TaskResponse(BaseModel):
-    """Task response model"""
-    id: UUID
+    """Task response schema"""
+    id: str
     title: str
     description: Optional[str]
     repository: str
     issue_number: Optional[int]
     pr_number: Optional[int]
     comment_id: Optional[str]
+    branch_name: Optional[str]
     action_type: ActionType
     status: TaskStatus
     priority: TaskPriority
-    progress: float
-    
-    # Timing
+    progress: float = Field(..., ge=0.0, le=1.0)
+    error_message: Optional[str]
+    retry_count: int
+    max_retries: int
+    github_installation_id: Optional[int]
+    triggered_by: Optional[str]
+    agent_config: Dict[str, Any]
+    tokens_used: int
+    cost: float
+    estimated_duration: Optional[int]
+    timeout_minutes: int
     created_at: datetime
     updated_at: datetime
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
-    
-    # Configuration and metadata
-    agent_config: Dict[str, Any]
-    triggered_by: Optional[str]
-    github_installation_id: Optional[int]
     user_id: Optional[str]
-    organization_id: Optional[str]
-    
-    # Resource usage
-    tokens_used: int
-    cost: float
-    execution_time_seconds: int
-    
-    # Results
-    result_data: Dict[str, Any]
-    artifacts_url: Optional[str]
-    error_message: Optional[str]
+    session_id: Optional[str]
     
     # Computed properties
-    is_active: bool
-    is_finished: bool
-    duration_seconds: Optional[int]
+    duration: Optional[int] = None
+    is_finished: bool = False
+    can_retry: bool = False
     
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
         json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "title": "Fix authentication bug",
-                "description": "JWT token validation issue",
-                "repository": "myorg/myapp",
-                "issue_number": 123,
+                "description": "Fix the JWT token validation issue",
+                "repository": "myorg/myrepo",
                 "action_type": "fix",
-                "status": "running",
+                "status": "completed",
                 "priority": "high",
-                "progress": 0.6,
-                "created_at": "2025-10-29T20:00:00Z",
-                "updated_at": "2025-10-29T20:15:00Z",
-                "started_at": "2025-10-29T20:01:00Z",
-                "tokens_used": 2500,
-                "cost": 0.05,
-                "execution_time_seconds": 900,
-                "is_active": True,
-                "is_finished": False,
-                "duration_seconds": 840
+                "progress": 1.0,
+                "tokens_used": 15000,
+                "cost": 0.25,
+                "duration": 1800,
+                "created_at": "2023-01-01T12:00:00Z",
+                "completed_at": "2023-01-01T12:30:00Z"
             }
         }
 
 
 class TaskListResponse(BaseModel):
-    """Response for task list queries"""
-    tasks: List[TaskResponse]
+    """Response for listing tasks"""
+    items: List[TaskResponse]
     total: int
-    page: int = Field(ge=1)
-    per_page: int = Field(ge=1, le=100)
-    total_pages: int = Field(ge=1)
+    page: int
+    per_page: int
+    has_next: bool
+    has_prev: bool
+
+
+class TaskMetrics(BaseModel):
+    """Task execution metrics"""
+    execution_time: int = Field(..., description="Execution time in seconds")
+    tokens_used: int = Field(..., description="Total tokens consumed")
+    cost: float = Field(..., description="Total cost in USD")
+    files_changed: int = Field(..., description="Number of files modified")
+    lines_added: int = Field(..., description="Lines of code added")
+    lines_removed: int = Field(..., description="Lines of code removed")
+    commits_created: int = Field(..., description="Number of commits created")
+    tests_run: int = Field(..., description="Number of tests executed")
+    tests_passed: int = Field(..., description="Number of tests passed")
+    coverage_change: float = Field(..., description="Code coverage change percentage")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "tasks": ["..."],  # TaskResponse objects
-                "total": 42,
-                "page": 1,
-                "per_page": 20,
-                "total_pages": 3
+                "execution_time": 1800,
+                "tokens_used": 15000,
+                "cost": 0.25,
+                "files_changed": 3,
+                "lines_added": 45,
+                "lines_removed": 12,
+                "commits_created": 2,
+                "tests_run": 25,
+                "tests_passed": 23,
+                "coverage_change": 2.5
             }
         }
 
 
-class TaskLogEntry(BaseModel):
+class TaskLog(BaseModel):
     """Task log entry"""
-    id: UUID
-    level: str
-    message: str
-    component: Optional[str]
-    data: Dict[str, Any]
-    created_at: datetime
+    timestamp: datetime
+    level: str = Field(..., description="Log level (DEBUG, INFO, WARNING, ERROR)")
+    message: str = Field(..., description="Log message")
+    component: Optional[str] = Field(None, description="Component that generated the log")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     
     class Config:
-        from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "level": "INFO",
-                "message": "Started analyzing repository structure",
-                "component": "agent",
-                "data": {
-                    "files_found": 42,
-                    "languages": ["python", "javascript"]
-                },
-                "created_at": "2025-10-29T20:05:00Z"
-            }
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
         }
 
 
-class TaskLogsResponse(BaseModel):
-    """Response for task logs"""
-    logs: List[TaskLogEntry]
-    total: int
-    page: int = Field(ge=1)
-    per_page: int = Field(ge=1, le=1000)
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "logs": ["..."],  # TaskLogEntry objects
-                "total": 150,
-                "page": 1,
-                "per_page": 100
-            }
-        }
-
-
-class TaskMetricEntry(BaseModel):
-    """Task metric entry"""
-    metric_name: str
-    metric_value: float
-    metric_unit: Optional[str]
-    tags: Dict[str, Any]
-    recorded_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-class TaskMetricsResponse(BaseModel):
-    """Response for task metrics"""
-    metrics: List[TaskMetricEntry]
-    summary: Dict[str, Any]
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "metrics": [
-                    {
-                        "metric_name": "tokens_used",
-                        "metric_value": 2500.0,
-                        "metric_unit": "tokens",
-                        "tags": {"provider": "openai", "model": "gpt-4-turbo"},
-                        "recorded_at": "2025-10-29T20:15:00Z"
-                    }
-                ],
-                "summary": {
-                    "total_cost": 0.05,
-                    "total_tokens": 2500,
-                    "execution_time": 900,
-                    "files_changed": 3
-                }
-            }
-        }
-
-
-class AgentProfileResponse(BaseModel):
-    """Agent profile response"""
-    id: UUID
+class TaskArtifact(BaseModel):
+    """Task artifact (file, screenshot, etc.)"""
+    id: str
     name: str
-    description: Optional[str]
-    model_config: Dict[str, Any]
-    system_prompt: Optional[str]
-    behavior_config: Dict[str, Any]
-    tools_config: Dict[str, Any]
-    mcp_servers: List[Dict[str, Any]]
-    security_config: Dict[str, Any]
-    resource_limits: Dict[str, Any]
-    is_public: bool
-    usage_count: int
+    type: str = Field(..., description="Artifact type (file, screenshot, report, etc.)")
+    size: int = Field(..., description="Size in bytes")
+    url: str = Field(..., description="Download URL")
     created_at: datetime
-    updated_at: datetime
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     
     class Config:
-        from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "name": "Frontend Specialist",
-                "description": "Expert in React, TypeScript, and modern frontend practices",
-                "model_config": {
-                    "primary_model": "gpt-4-turbo",
-                    "fallback_model": "claude-3-sonnet",
-                    "temperature": 0.2,
-                    "max_tokens": 4000
-                },
-                "system_prompt": "You are a frontend development expert...",
-                "tools_config": {
-                    "enabled_tools": ["npm", "playwright", "jest"]
-                },
-                "is_public": False,
-                "usage_count": 25,
-                "created_at": "2025-10-29T10:00:00Z"
-            }
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
         }

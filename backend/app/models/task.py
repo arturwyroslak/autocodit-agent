@@ -1,19 +1,19 @@
 """
-AutoCodit Agent - Task Models
+AutoCodit Agent - Task Model
 
-SQLAlchemy models for coding tasks and related entities.
+Task management and execution tracking model.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
 from enum import Enum
+from typing import Optional
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, Text, JSON, Boolean, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, ENUM
 from sqlalchemy.orm import relationship
 import uuid
 
-from app.core.database import Base
+from app.models.base import Base
 
 
 class TaskStatus(str, Enum):
@@ -23,7 +23,7 @@ class TaskStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-    PAUSED = "paused"
+    TIMEOUT = "timeout"
 
 
 class TaskPriority(str, Enum):
@@ -47,168 +47,82 @@ class ActionType(str, Enum):
 
 
 class Task(Base):
-    """Coding task model"""
+    """Task model for coding agent work"""
     
     __tablename__ = "tasks"
     
-    # Primary fields
+    # Primary key
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
     
-    # GitHub integration
+    # Basic information
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # GitHub context
     repository = Column(String(255), nullable=False, index=True)
     issue_number = Column(Integer, nullable=True, index=True)
     pr_number = Column(Integer, nullable=True, index=True)
-    comment_id = Column(String(50), nullable=True)
-    github_installation_id = Column(Integer, nullable=True)
+    comment_id = Column(String(255), nullable=True)
+    branch_name = Column(String(255), nullable=True)
     
     # Task configuration
-    action_type = Column(ENUM(ActionType), nullable=False, default=ActionType.PLAN)
-    status = Column(ENUM(TaskStatus), nullable=False, default=TaskStatus.QUEUED, index=True)
-    priority = Column(ENUM(TaskPriority), nullable=False, default=TaskPriority.NORMAL)
+    action_type = Column(ENUM(ActionType), default=ActionType.PLAN, nullable=False)
+    status = Column(ENUM(TaskStatus), default=TaskStatus.QUEUED, nullable=False, index=True)
+    priority = Column(ENUM(TaskPriority), default=TaskPriority.NORMAL, nullable=False)
     
-    # Execution details
-    progress = Column(Float, default=0.0)  # 0.0 to 1.0
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    # Progress tracking
+    progress = Column(Float, default=0.0, nullable=False)  # 0.0 to 1.0
+    
+    # Error handling
     error_message = Column(Text, nullable=True)
+    retry_count = Column(Integer, default=0, nullable=False)
+    max_retries = Column(Integer, default=3, nullable=False)
     
-    # Configuration and metadata
-    agent_config = Column(JSON, default=dict)
-    triggered_by = Column(String(50), nullable=True)  # "issue_assignment", "comment_command", etc.
+    # GitHub App context
+    github_installation_id = Column(Integer, nullable=True)
+    triggered_by = Column(String(50), nullable=True)  # issue_assignment, comment_command, api_request
     
-    # User and organization
-    user_id = Column(String(50), nullable=True, index=True)  # GitHub user ID
-    organization_id = Column(String(50), nullable=True, index=True)
+    # Agent configuration
+    agent_config = Column(JSON, default=dict, nullable=False)
     
-    # Resource usage tracking
-    tokens_used = Column(Integer, default=0)
-    cost = Column(Float, default=0.0)
-    execution_time_seconds = Column(Integer, default=0)
+    # Resource usage
+    tokens_used = Column(Integer, default=0, nullable=False)
+    cost = Column(Float, default=0.0, nullable=False)
     
-    # Results and artifacts
-    result_data = Column(JSON, default=dict)
-    artifacts_url = Column(String(500), nullable=True)
+    # Timing
+    estimated_duration = Column(Integer, nullable=True)  # seconds
+    timeout_minutes = Column(Integer, default=60, nullable=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Foreign keys
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=True, index=True)
     
     # Relationships
-    sessions = relationship("Session", back_populates="task", cascade="all, delete-orphan")
-    logs = relationship("TaskLog", back_populates="task", cascade="all, delete-orphan")
+    user = relationship("User", back_populates="tasks")
+    session = relationship("Session", back_populates="task", uselist=False)
     
-    def __repr__(self):
-        return f"<Task(id={self.id}, title='{self.title}', status={self.status})>"
+    def __repr__(self) -> str:
+        return f"<Task(id={self.id}, title={self.title}, status={self.status})>"
     
     @property
-    def is_active(self) -> bool:
-        """Check if task is currently active"""
-        return self.status in [TaskStatus.QUEUED, TaskStatus.RUNNING, TaskStatus.PAUSED]
+    def duration(self) -> Optional[int]:
+        """Get task duration in seconds"""
+        if self.started_at and self.completed_at:
+            return int((self.completed_at - self.started_at).total_seconds())
+        return None
     
     @property
     def is_finished(self) -> bool:
-        """Check if task is finished (completed, failed, or cancelled)"""
-        return self.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]
+        """Check if task is in a finished state"""
+        return self.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.TIMEOUT]
     
     @property
-    def duration_seconds(self) -> Optional[int]:
-        """Calculate task duration in seconds"""
-        if self.started_at and self.completed_at:
-            return int((self.completed_at - self.started_at).total_seconds())
-        elif self.started_at:
-            return int((datetime.now(timezone.utc) - self.started_at).total_seconds())
-        return None
-
-
-class TaskLog(Base):
-    """Task execution logs"""
-    
-    __tablename__ = "task_logs"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False, index=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=True, index=True)
-    
-    # Log entry details
-    level = Column(String(10), nullable=False, index=True)  # DEBUG, INFO, WARNING, ERROR
-    message = Column(Text, nullable=False)
-    component = Column(String(50), nullable=True)  # "agent", "mcp", "tool", "ai"
-    
-    # Structured log data
-    data = Column(JSON, default=dict)
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    
-    # Relationships
-    task = relationship("Task", back_populates="logs")
-    session = relationship("Session", back_populates="logs")
-    
-    def __repr__(self):
-        return f"<TaskLog(id={self.id}, level={self.level}, message='{self.message[:50]}...')>"
-
-
-class TaskMetric(Base):
-    """Task performance metrics"""
-    
-    __tablename__ = "task_metrics"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False, index=True)
-    
-    # Metric details
-    metric_name = Column(String(100), nullable=False, index=True)
-    metric_value = Column(Float, nullable=False)
-    metric_unit = Column(String(20), nullable=True)  # "seconds", "tokens", "bytes", etc.
-    
-    # Metadata
-    tags = Column(JSON, default=dict)
-    
-    # Timestamp
-    recorded_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    
-    def __repr__(self):
-        return f"<TaskMetric(task_id={self.task_id}, name={self.metric_name}, value={self.metric_value})>"
-
-
-class AgentProfile(Base):
-    """Agent configuration profiles"""
-    
-    __tablename__ = "agent_profiles"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(100), nullable=False, unique=True, index=True)
-    description = Column(Text, nullable=True)
-    
-    # AI Model configuration
-    model_config = Column(JSON, nullable=False, default=dict)
-    
-    # System prompt and behavior
-    system_prompt = Column(Text, nullable=True)
-    behavior_config = Column(JSON, default=dict)
-    
-    # Tool and MCP configuration
-    tools_config = Column(JSON, default=dict)
-    mcp_servers = Column(JSON, default=list)
-    
-    # Security and resource limits
-    security_config = Column(JSON, default=dict)
-    resource_limits = Column(JSON, default=dict)
-    
-    # Usage and permissions
-    is_public = Column(Boolean, default=False)
-    created_by = Column(String(50), nullable=True)  # User ID who created this profile
-    organization_id = Column(String(50), nullable=True, index=True)
-    
-    # Usage statistics
-    usage_count = Column(Integer, default=0)
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
-    def __repr__(self):
-        return f"<AgentProfile(id={self.id}, name='{self.name}')>"
+    def can_retry(self) -> bool:
+        """Check if task can be retried"""
+        return self.status == TaskStatus.FAILED and self.retry_count < self.max_retries

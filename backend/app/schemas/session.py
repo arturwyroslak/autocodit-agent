@@ -1,280 +1,192 @@
 """
 AutoCodit Agent - Session Schemas
 
-Pydantic models for session-related API requests and responses.
+Pydantic models for session-related API operations.
 """
 
 from datetime import datetime
-from typing import Dict, Any, List, Optional
-from uuid import UUID
-
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 
-from app.models.session import SessionStatus, StepStatus
+from app.models.session import SessionStatus
+
+
+class SessionBase(BaseModel):
+    """Base session schema"""
+    name: Optional[str] = Field(None, description="Session name")
+    runner_config: Dict[str, Any] = Field(default_factory=dict, description="Runner configuration")
+    environment_vars: Dict[str, Any] = Field(default_factory=dict, description="Environment variables")
+    memory_limit: Optional[str] = Field(None, description="Memory limit (e.g., '2GB')")
+    cpu_limit: Optional[str] = Field(None, description="CPU limit (e.g., '1000m')")
+    network_name: Optional[str] = Field(None, description="Docker network name")
+    volumes: List[str] = Field(default_factory=list, description="Volume mounts")
+
+
+class CreateSessionRequest(SessionBase):
+    """Request to create a new session"""
+    task_id: str = Field(..., description="Associated task ID")
+    image_name: str = Field("autocodit-agent-runner:latest", description="Container image")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task_id": "123e4567-e89b-12d3-a456-426614174000",
+                "name": "Fix Auth Bug Session",
+                "image_name": "autocodit-agent-runner:latest",
+                "memory_limit": "2GB",
+                "cpu_limit": "1000m",
+                "environment_vars": {
+                    "TASK_TYPE": "fix",
+                    "DEBUG": "true"
+                },
+                "runner_config": {
+                    "timeout": 3600,
+                    "model": "gpt-4-turbo"
+                }
+            }
+        }
 
 
 class SessionResponse(BaseModel):
-    """Session response model"""
-    id: UUID
-    task_id: UUID
+    """Session response schema"""
+    id: str
+    name: Optional[str]
     status: SessionStatus
-    
-    # Container and execution details
     container_id: Optional[str]
-    runner_image: Optional[str]
+    container_name: Optional[str]
+    image_name: Optional[str]
     runner_config: Dict[str, Any]
-    
-    # Timing
+    environment_vars: Dict[str, Any]
+    memory_limit: Optional[str]
+    cpu_limit: Optional[str]
+    memory_used: int
+    cpu_used: float
+    network_name: Optional[str]
+    volumes: List[str]
+    exit_code: Optional[int]
+    error_message: Optional[str]
+    log_file_path: Optional[str]
+    output_files: List[str]
+    artifacts: List[str]
+    last_heartbeat: Optional[datetime]
+    health_check_failures: int
+    security_violations: List[Dict[str, Any]]
+    firewall_blocks: int
     created_at: datetime
     updated_at: datetime
     started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    timeout_at: Optional[datetime]
-    
-    # Progress
-    progress: float
-    current_step: Optional[str]
-    total_steps: int
-    completed_steps: int
-    
-    # Resource usage
-    max_memory_mb: int
-    cpu_time_seconds: float
-    network_bytes_sent: int
-    network_bytes_received: int
-    
-    # AI and cost tracking
-    tokens_used: int
-    ai_requests_count: int
-    estimated_cost: float
-    
-    # Results
-    output_summary: Optional[str]
-    artifacts_urls: List[str]
-    final_result: Dict[str, Any]
-    
-    # Error handling
-    error_message: Optional[str]
-    retry_count: int
+    finished_at: Optional[datetime]
+    user_id: Optional[str]
     
     # Computed properties
-    is_active: bool
-    is_finished: bool
-    duration_seconds: Optional[int]
-    success_rate: float
+    duration: Optional[int] = None
+    is_running: bool = False
+    is_finished: bool = False
+    memory_usage_mb: float = 0.0
     
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
         json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
-                "task_id": "987fcdeb-51a2-43d7-8f9e-123456789abc",
+                "name": "Fix Auth Bug Session",
                 "status": "running",
                 "container_id": "abc123def456",
-                "progress": 0.65,
-                "current_step": "Running tests",
-                "total_steps": 8,
-                "completed_steps": 5,
-                "tokens_used": 1200,
-                "estimated_cost": 0.024,
-                "is_active": True,
-                "is_finished": False,
-                "success_rate": 0.875
+                "image_name": "autocodit-agent-runner:latest",
+                "memory_used": 1073741824,
+                "cpu_used": 45.2,
+                "duration": 1200,
+                "is_running": True,
+                "memory_usage_mb": 1024.0,
+                "created_at": "2023-01-01T12:00:00Z",
+                "started_at": "2023-01-01T12:01:00Z"
             }
         }
 
 
-class SessionStepResponse(BaseModel):
-    """Session step response model"""
-    id: UUID
-    session_id: UUID
-    step_name: str
-    step_type: str
-    step_order: int
-    status: StepStatus
-    
-    # Input and output
-    input_data: Dict[str, Any]
-    parameters: Dict[str, Any]
-    output_data: Dict[str, Any]
-    result_summary: Optional[str]
-    
-    # Timing
-    created_at: datetime
-    updated_at: datetime
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    
-    # Resource usage
-    tokens_used: int
-    execution_time_ms: int
-    memory_peak_mb: int
-    
-    # Error handling
-    error_message: Optional[str]
-    retry_count: int
-    
-    # Computed properties
-    duration_ms: Optional[int]
-    
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "session_id": "987fcdeb-51a2-43d7-8f9e-123456789abc",
-                "step_name": "Analyze code structure",
-                "step_type": "ai_request",
-                "step_order": 1,
-                "status": "completed",
-                "result_summary": "Found 5 Python modules with potential issues",
-                "tokens_used": 450,
-                "execution_time_ms": 2500,
-                "duration_ms": 2500
-            }
-        }
-
-
-class SessionStepsResponse(BaseModel):
-    """Response for session steps list"""
-    steps: List[SessionStepResponse]
+class SessionListResponse(BaseModel):
+    """Response for listing sessions"""
+    items: List[SessionResponse]
     total: int
+    page: int
+    per_page: int
+    has_next: bool
+    has_prev: bool
+
+
+class SessionMetrics(BaseModel):
+    """Session resource metrics"""
+    memory_usage: int = Field(..., description="Memory usage in bytes")
+    memory_limit: int = Field(..., description="Memory limit in bytes")
+    memory_percentage: float = Field(..., description="Memory usage percentage")
+    cpu_usage: float = Field(..., description="CPU usage percentage")
+    network_rx: int = Field(..., description="Network bytes received")
+    network_tx: int = Field(..., description="Network bytes transmitted")
+    disk_read: int = Field(..., description="Disk bytes read")
+    disk_write: int = Field(..., description="Disk bytes written")
+    uptime: int = Field(..., description="Uptime in seconds")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "steps": ["..."],  # SessionStepResponse objects
-                "total": 8
+                "memory_usage": 1073741824,
+                "memory_limit": 2147483648,
+                "memory_percentage": 50.0,
+                "cpu_usage": 45.2,
+                "network_rx": 1048576,
+                "network_tx": 524288,
+                "disk_read": 2097152,
+                "disk_write": 1048576,
+                "uptime": 1800
             }
         }
 
 
-class SessionArtifactResponse(BaseModel):
-    """Session artifact response"""
-    id: UUID
-    session_id: UUID
-    step_id: Optional[UUID]
-    artifact_type: str
-    artifact_name: str
-    file_path: Optional[str]
-    file_size_bytes: Optional[int]
-    content_type: Optional[str]
-    metadata: Dict[str, Any]
-    storage_backend: str
-    storage_url: Optional[str]
-    created_at: datetime
+class SessionLog(BaseModel):
+    """Session log entry"""
+    timestamp: datetime
+    level: str = Field(..., description="Log level")
+    message: str = Field(..., description="Log message")
+    source: str = Field(..., description="Log source (stdout, stderr, system)")
     
     class Config:
-        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class SessionCommand(BaseModel):
+    """Command to execute in session"""
+    command: str = Field(..., description="Command to execute")
+    timeout: int = Field(300, description="Command timeout in seconds")
+    capture_output: bool = Field(True, description="Capture command output")
+    
+    class Config:
         json_schema_extra = {
             "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "session_id": "987fcdeb-51a2-43d7-8f9e-123456789abc",
-                "artifact_type": "screenshot",
-                "artifact_name": "test_results.png",
-                "file_size_bytes": 125680,
-                "content_type": "image/png",
-                "storage_backend": "s3",
-                "storage_url": "https://artifacts.autocodit.com/screenshots/test_results.png",
-                "created_at": "2025-10-29T20:15:00Z"
+                "command": "npm test",
+                "timeout": 600,
+                "capture_output": True
             }
         }
 
 
-class SessionArtifactsResponse(BaseModel):
-    """Response for session artifacts"""
-    artifacts: List[SessionArtifactResponse]
-    total: int
+class SessionCommandResult(BaseModel):
+    """Result of session command execution"""
+    exit_code: int = Field(..., description="Command exit code")
+    stdout: str = Field(..., description="Standard output")
+    stderr: str = Field(..., description="Standard error")
+    execution_time: float = Field(..., description="Execution time in seconds")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "artifacts": ["..."],  # SessionArtifactResponse objects
-                "total": 5
-            }
-        }
-
-
-class SessionEventResponse(BaseModel):
-    """Session event response"""
-    id: UUID
-    session_id: UUID
-    event_type: str
-    event_data: Dict[str, Any]
-    message: Optional[str]
-    level: str
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "session_id": "987fcdeb-51a2-43d7-8f9e-123456789abc",
-                "event_type": "step_completed",
-                "event_data": {
-                    "step_name": "Run tests",
-                    "duration_ms": 5000,
-                    "tests_passed": 42,
-                    "tests_failed": 1
-                },
-                "message": "Test step completed with 1 failure",
-                "level": "warning",
-                "created_at": "2025-10-29T20:15:00Z"
-            }
-        }
-
-
-class SessionEventsResponse(BaseModel):
-    """Response for session events"""
-    events: List[SessionEventResponse]
-    total: int
-    page: int = Field(ge=1)
-    per_page: int = Field(ge=1, le=1000)
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "events": ["..."],  # SessionEventResponse objects
-                "total": 25,
-                "page": 1,
-                "per_page": 50
-            }
-        }
-
-
-class ResourceUsageResponse(BaseModel):
-    """Real-time resource usage response"""
-    session_id: UUID
-    
-    # Current resource usage
-    cpu_usage_percent: float
-    memory_usage_mb: int
-    memory_limit_mb: int
-    network_io: Dict[str, int]
-    
-    # Cumulative usage
-    total_cpu_time_seconds: float
-    peak_memory_mb: int
-    total_network_bytes: int
-    
-    # Timestamps
-    measured_at: datetime
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "session_id": "123e4567-e89b-12d3-a456-426614174000",
-                "cpu_usage_percent": 45.2,
-                "memory_usage_mb": 512,
-                "memory_limit_mb": 2048,
-                "network_io": {
-                    "bytes_sent": 1024000,
-                    "bytes_received": 2048000
-                },
-                "total_cpu_time_seconds": 125.5,
-                "peak_memory_mb": 768,
-                "total_network_bytes": 3072000,
-                "measured_at": "2025-10-29T20:15:00Z"
+                "exit_code": 0,
+                "stdout": "All tests passed!",
+                "stderr": "",
+                "execution_time": 15.2
             }
         }

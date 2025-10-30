@@ -1,221 +1,215 @@
 """
-AutoCodit Agent - Sessions API Endpoints
+AutoCodit Agent - Session API Endpoints
 
-RESTful API endpoints for session monitoring and management.
+API endpoints for session management and monitoring.
 """
 
 from typing import List, Optional
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from app.core.database import get_db
 from app.services.runner_service import RunnerService
 from app.schemas.session import (
+    CreateSessionRequest,
     SessionResponse,
-    SessionStepsResponse,
-    SessionArtifactsResponse,
-    SessionEventsResponse,
-    ResourceUsageResponse
+    SessionListResponse,
+    SessionMetrics,
+    SessionLog,
+    SessionCommand,
+    SessionCommandResult
 )
+from app.models.session import SessionStatus
 from app.core.auth import get_current_user
 from app.models.user import User
-from app.websocket.manager import websocket_manager
 
+logger = structlog.get_logger()
 router = APIRouter()
-runner_service = RunnerService()
+
+
+@router.post("/", response_model=SessionResponse, status_code=201)
+async def create_session(
+    session_request: CreateSessionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Create a new execution session"""
+    runner_service = RunnerService()
+    
+    try:
+        config = session_request.dict()
+        if current_user:
+            config["user_id"] = str(current_user.id)
+        
+        session = await runner_service.create_runner(
+            task_id=session_request.task_id,
+            config=config
+        )
+        
+        logger.info(
+            "Session created via API",
+            session_id=session.id,
+            task_id=session_request.task_id,
+            user_id=current_user.id if current_user else None
+        )
+        
+        return session
+    
+    except Exception as e:
+        logger.error("Failed to create session", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/", response_model=SessionListResponse)
+async def list_sessions(
+    status: Optional[SessionStatus] = Query(None, description="Filter by status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=100, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """List sessions with filtering and pagination"""
+    # TODO: Implement session listing
+    return SessionListResponse(
+        items=[],
+        total=0,
+        page=page,
+        per_page=per_page,
+        has_next=False,
+        has_prev=False
+    )
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
-    session_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
-    """Get session details"""
-    
-    # TODO: Implement session retrieval with user validation
-    raise HTTPException(status_code=501, detail="Not implemented")
+    """Get session by ID"""
+    # TODO: Implement session retrieval
+    raise HTTPException(status_code=404, detail="Session not found")
 
 
-@router.get("/{session_id}/steps", response_model=SessionStepsResponse)
-async def get_session_steps(
-    session_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get session execution steps"""
-    
-    # TODO: Implement steps retrieval
-    return SessionStepsResponse(steps=[], total=0)
-
-
-@router.get("/{session_id}/artifacts", response_model=SessionArtifactsResponse)
-async def get_session_artifacts(
-    session_id: UUID,
-    artifact_type: Optional[str] = Query(None, description="Filter by artifact type"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get session artifacts (screenshots, files, etc.)"""
-    
-    # TODO: Implement artifacts retrieval
-    return SessionArtifactsResponse(artifacts=[], total=0)
-
-
-@router.get("/{session_id}/events", response_model=SessionEventsResponse)
-async def get_session_events(
-    session_id: UUID,
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    level: Optional[str] = Query(None, description="Filter by level"),
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(50, ge=1, le=1000, description="Events per page"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get session events"""
-    
-    # TODO: Implement events retrieval with pagination
-    return SessionEventsResponse(
-        events=[],
-        total=0,
-        page=page,
-        per_page=per_page
-    )
-
-
-@router.get("/{session_id}/resource-usage", response_model=ResourceUsageResponse)
-async def get_session_resource_usage(
-    session_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get real-time resource usage for session"""
-    
-    # Get runner status
-    status = await runner_service.get_runner_status(str(session_id))
-    
-    if not status:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    from datetime import datetime, timezone
-    
-    # Convert to response format
-    return ResourceUsageResponse(
-        session_id=session_id,
-        cpu_usage_percent=status["resources"].get("cpu_usage", 0.0),
-        memory_usage_mb=status["resources"].get("memory_usage", 0) // (1024 * 1024),
-        memory_limit_mb=status["resources"].get("memory_limit", 0) // (1024 * 1024),
-        network_io=status["resources"].get("network_io", {}),
-        total_cpu_time_seconds=0.0,  # TODO: Calculate from stats
-        peak_memory_mb=0,  # TODO: Track peak usage
-        total_network_bytes=0,  # TODO: Calculate total
-        measured_at=datetime.now(timezone.utc)
-    )
-
-
-@router.get("/{session_id}/logs")
-async def get_session_logs(
-    session_id: UUID,
-    tail: int = Query(100, ge=1, le=10000, description="Number of lines to tail"),
-    follow: bool = Query(False, description="Follow log stream"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get session logs"""
-    
-    logs = await runner_service.get_runner_logs(
-        session_id=str(session_id),
-        tail=tail,
-        follow=follow
-    )
-    
-    if follow:
-        # TODO: Implement streaming response
-        pass
-    
-    return {"logs": logs}
-
-
-@router.delete("/{session_id}", status_code=204)
+@router.delete("/{session_id}")
 async def cancel_session(
-    session_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
-    """Cancel running session"""
-    
-    success = await runner_service.cancel_runner(str(session_id))
-    
-    if not success:
-        raise HTTPException(
-            status_code=404,
-            detail="Session not found or cannot be cancelled"
-        )
-
-
-@router.websocket("/{session_id}/ws")
-async def session_websocket(
-    websocket: WebSocket,
-    session_id: UUID
-):
-    """WebSocket endpoint for real-time session updates"""
-    
-    await websocket_manager.connect(websocket, f"session:{session_id}")
+    """Cancel and stop a running session"""
+    runner_service = RunnerService()
     
     try:
-        while True:
-            # Keep connection alive
-            data = await websocket.receive_text()
-            
-            # Handle client messages if needed
-            import json
-            try:
-                message = json.loads(data)
-                if message.get("type") == "ping":
-                    await websocket.send_json({"type": "pong"})
-            except json.JSONDecodeError:
-                pass
-                
-    except WebSocketDisconnect:
-        websocket_manager.disconnect(f"session:{session_id}")
+        success = await runner_service.cancel_runner(session_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found or cannot be cancelled")
+        
+        logger.info("Session cancelled", session_id=session_id)
+        
+        return {"message": "Session cancelled successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to cancel session", session_id=session_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{session_id}/steer", response_model=dict)
-async def steer_session(
-    session_id: UUID,
-    action: dict,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+@router.get("/{session_id}/status")
+async def get_session_status(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
-    """Steer running session (pause, resume, modify parameters)"""
+    """Get session status and resource usage"""
+    runner_service = RunnerService()
     
-    # TODO: Implement session steering
-    # This would allow users to:
-    # - Pause/resume execution
-    # - Modify agent parameters mid-execution
-    # - Provide feedback or corrections
-    # - Approve/reject changes
+    try:
+        status = await runner_service.get_runner_status(session_id)
+        
+        if not status:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return status
     
-    action_type = action.get("type")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get session status", session_id=session_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{session_id}/logs", response_model=List[str])
+async def get_session_logs(
+    session_id: str,
+    tail: int = Query(100, ge=1, le=1000, description="Number of log lines"),
+    follow: bool = Query(False, description="Follow logs (streaming)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Get session logs"""
+    runner_service = RunnerService()
     
-    if action_type == "pause":
-        # Pause execution
-        pass
-    elif action_type == "resume":
-        # Resume execution
-        pass
-    elif action_type == "feedback":
-        # Provide feedback to agent
-        pass
-    elif action_type == "approve":
-        # Approve current changes
-        pass
-    elif action_type == "reject":
-        # Reject current changes
-        pass
-    else:
-        raise HTTPException(status_code=400, detail="Unknown action type")
+    try:
+        logs = await runner_service.get_runner_logs(
+            session_id=session_id,
+            tail=tail,
+            follow=follow
+        )
+        
+        return logs
     
-    return {"status": "accepted", "action": action_type}
+    except Exception as e:
+        logger.error("Failed to get session logs", session_id=session_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{session_id}/metrics", response_model=SessionMetrics)
+async def get_session_metrics(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Get session resource metrics"""
+    runner_service = RunnerService()
+    
+    try:
+        status = await runner_service.get_runner_status(session_id)
+        
+        if not status:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        resources = status.get("resources", {})
+        
+        return SessionMetrics(
+            memory_usage=resources.get("memory_usage", 0),
+            memory_limit=resources.get("memory_limit", 0),
+            memory_percentage=(resources.get("memory_usage", 0) / max(resources.get("memory_limit", 1), 1)) * 100,
+            cpu_usage=resources.get("cpu_usage", 0.0),
+            network_rx=resources.get("network_io", {}).get("rx_bytes", 0),
+            network_tx=resources.get("network_io", {}).get("tx_bytes", 0),
+            disk_read=resources.get("block_io", {}).get("read", 0),
+            disk_write=resources.get("block_io", {}).get("write", 0),
+            uptime=0  # TODO: Calculate from started_at
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get session metrics", session_id=session_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{session_id}/exec", response_model=SessionCommandResult)
+async def execute_command(
+    session_id: str,
+    command: SessionCommand,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Execute command in session"""
+    # TODO: Implement command execution in container
+    raise HTTPException(status_code=501, detail="Command execution not yet implemented")

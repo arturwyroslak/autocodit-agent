@@ -1,65 +1,76 @@
 """
 AutoCodit Agent - Monitoring and Metrics
 
-Prometheus metrics collection and health monitoring.
+Prometheus metrics, health checks, and observability.
 """
 
 import time
-from typing import Dict, Any, Optional
-from functools import wraps
+from typing import Dict, Any
 
-from prometheus_client import Counter, Histogram, Gauge, Info, CollectorRegistry, REGISTRY
+from prometheus_client import Counter, Histogram, Gauge, Info
 import structlog
 
 from app.core.config import get_settings
 
 logger = structlog.get_logger()
 
-# Metrics definitions
-HTTP_REQUESTS = Counter(
+# Prometheus metrics
+REQUEST_COUNT = Counter(
     "http_requests_total",
     "Total HTTP requests",
     ["method", "endpoint", "status_code"]
 )
 
-HTTP_REQUEST_DURATION = Histogram(
+REQUEST_DURATION = Histogram(
     "http_request_duration_seconds",
     "HTTP request duration in seconds",
     ["method", "endpoint"]
 )
 
-TASKS_TOTAL = Counter(
+TASK_COUNT = Counter(
     "tasks_total",
     "Total tasks created",
-    ["action_type", "status", "repository"]
+    ["action_type", "repository", "status"]
 )
 
-TASKS_DURATION = Histogram(
-    "tasks_duration_seconds",
+TASK_DURATION = Histogram(
+    "task_duration_seconds",
     "Task execution duration in seconds",
     ["action_type", "status"]
 )
 
-SESSIONS_ACTIVE = Gauge(
-    "sessions_active",
-    "Currently active sessions"
+ACTIVE_TASKS = Gauge(
+    "active_tasks",
+    "Number of currently active tasks"
 )
 
-RUNNERS_ACTIVE = Gauge(
-    "runners_active",
-    "Currently active runners"
+ACTIVE_SESSIONS = Gauge(
+    "active_sessions",
+    "Number of currently active sessions"
 )
 
-AI_REQUESTS = Counter(
-    "ai_requests_total",
-    "Total AI API requests",
-    ["provider", "model", "status"]
+CONTAINER_MEMORY_USAGE = Gauge(
+    "container_memory_usage_bytes",
+    "Container memory usage in bytes",
+    ["session_id", "task_id"]
 )
 
-AI_TOKENS = Counter(
+CONTAINER_CPU_USAGE = Gauge(
+    "container_cpu_usage_percent",
+    "Container CPU usage percentage",
+    ["session_id", "task_id"]
+)
+
+AI_TOKEN_USAGE = Counter(
     "ai_tokens_total",
     "Total AI tokens used",
-    ["provider", "model", "type"]
+    ["provider", "model", "task_type"]
+)
+
+AI_REQUEST_DURATION = Histogram(
+    "ai_request_duration_seconds",
+    "AI request duration in seconds",
+    ["provider", "model"]
 )
 
 AI_COST = Counter(
@@ -70,197 +81,206 @@ AI_COST = Counter(
 
 WEBSOCKET_CONNECTIONS = Gauge(
     "websocket_connections_active",
-    "Currently active WebSocket connections"
+    "Number of active WebSocket connections"
 )
 
 GITHUB_API_REQUESTS = Counter(
     "github_api_requests_total",
     "Total GitHub API requests",
-    ["endpoint", "method", "status_code"]
+    ["endpoint", "status_code", "installation_id"]
 )
 
-CONTAINER_RESOURCES = Gauge(
-    "container_resources",
-    "Container resource usage",
-    ["resource_type", "container_id"]
+SECURITY_VIOLATIONS = Counter(
+    "security_violations_total",
+    "Total security violations detected",
+    ["type", "severity"]
 )
 
-# Application info
-APP_INFO = Info(
-    "autocodit_agent_info",
-    "AutoCodit Agent application information"
-)
+# System info
+APP_INFO = Info("app_info", "Application information")
+
+
+def setup_monitoring() -> None:
+    """Initialize monitoring and metrics"""
+    settings = get_settings()
+    
+    # Set application info
+    APP_INFO.info({
+        "version": "1.0.0",
+        "service": "autocodit-agent",
+        "environment": "development" if settings.DEBUG else "production"
+    })
+    
+    logger.info("Monitoring initialized", metrics_enabled=settings.METRICS_ENABLED)
 
 
 class MetricsCollector:
-    """Centralized metrics collection"""
+    """Utility class for collecting and recording metrics"""
     
-    def __init__(self):
-        self.settings = get_settings()
-    
+    @staticmethod
     def record_http_request(
-        self,
         method: str,
         endpoint: str,
         status_code: int,
         duration: float
     ) -> None:
         """Record HTTP request metrics"""
-        HTTP_REQUESTS.labels(
+        REQUEST_COUNT.labels(
             method=method,
             endpoint=endpoint,
             status_code=status_code
         ).inc()
         
-        HTTP_REQUEST_DURATION.labels(
+        REQUEST_DURATION.labels(
             method=method,
             endpoint=endpoint
         ).observe(duration)
     
+    @staticmethod
     def record_task_created(
-        self,
         action_type: str,
         repository: str
     ) -> None:
         """Record task creation"""
-        TASKS_TOTAL.labels(
+        TASK_COUNT.labels(
             action_type=action_type,
-            status="created",
-            repository=repository
+            repository=repository,
+            status="created"
         ).inc()
+        
+        ACTIVE_TASKS.inc()
     
+    @staticmethod
     def record_task_completed(
-        self,
         action_type: str,
-        status: str,
-        duration_seconds: float
+        repository: str,
+        duration: float,
+        success: bool
     ) -> None:
         """Record task completion"""
-        TASKS_TOTAL.labels(
+        status = "completed" if success else "failed"
+        
+        TASK_COUNT.labels(
             action_type=action_type,
-            status=status,
-            repository=""
+            repository=repository,
+            status=status
         ).inc()
         
-        TASKS_DURATION.labels(
+        TASK_DURATION.labels(
             action_type=action_type,
             status=status
-        ).observe(duration_seconds)
+        ).observe(duration)
+        
+        ACTIVE_TASKS.dec()
     
-    def set_active_sessions(self, count: int) -> None:
-        """Update active sessions gauge"""
-        SESSIONS_ACTIVE.set(count)
+    @staticmethod
+    def record_session_started(session_id: str, task_id: str) -> None:
+        """Record session start"""
+        ACTIVE_SESSIONS.inc()
+        
+        logger.info(
+            "Session metrics started",
+            session_id=session_id,
+            task_id=task_id
+        )
     
-    def set_active_runners(self, count: int) -> None:
-        """Update active runners gauge"""
-        RUNNERS_ACTIVE.set(count)
+    @staticmethod
+    def record_session_finished(session_id: str, task_id: str) -> None:
+        """Record session completion"""
+        ACTIVE_SESSIONS.dec()
+        
+        # Clear container metrics
+        CONTAINER_MEMORY_USAGE.remove(session_id, task_id)
+        CONTAINER_CPU_USAGE.remove(session_id, task_id)
+        
+        logger.info(
+            "Session metrics finished",
+            session_id=session_id,
+            task_id=task_id
+        )
     
-    def record_ai_request(
-        self,
+    @staticmethod
+    def record_container_metrics(
+        session_id: str,
+        task_id: str,
+        memory_usage: int,
+        cpu_usage: float
+    ) -> None:
+        """Record container resource metrics"""
+        CONTAINER_MEMORY_USAGE.labels(
+            session_id=session_id,
+            task_id=task_id
+        ).set(memory_usage)
+        
+        CONTAINER_CPU_USAGE.labels(
+            session_id=session_id,
+            task_id=task_id
+        ).set(cpu_usage)
+    
+    @staticmethod
+    def record_ai_usage(
         provider: str,
         model: str,
-        status: str,
-        tokens: Dict[str, int],
-        cost: float
+        task_type: str,
+        tokens: int,
+        cost: float,
+        duration: float
     ) -> None:
-        """Record AI API request"""
-        AI_REQUESTS.labels(
+        """Record AI model usage"""
+        AI_TOKEN_USAGE.labels(
             provider=provider,
             model=model,
-            status=status
-        ).inc()
+            task_type=task_type
+        ).inc(tokens)
         
-        # Record token usage
-        for token_type, count in tokens.items():
-            AI_TOKENS.labels(
-                provider=provider,
-                model=model,
-                type=token_type
-            ).inc(count)
+        AI_REQUEST_DURATION.labels(
+            provider=provider,
+            model=model
+        ).observe(duration)
         
-        # Record cost
         AI_COST.labels(
             provider=provider,
             model=model
         ).inc(cost)
     
-    def set_websocket_connections(self, count: int) -> None:
-        """Update WebSocket connections gauge"""
-        WEBSOCKET_CONNECTIONS.set(count)
+    @staticmethod
+    def record_websocket_connection(connected: bool) -> None:
+        """Record WebSocket connection change"""
+        if connected:
+            WEBSOCKET_CONNECTIONS.inc()
+        else:
+            WEBSOCKET_CONNECTIONS.dec()
     
+    @staticmethod
     def record_github_api_request(
-        self,
         endpoint: str,
-        method: str,
-        status_code: int
+        status_code: int,
+        installation_id: str
     ) -> None:
         """Record GitHub API request"""
         GITHUB_API_REQUESTS.labels(
             endpoint=endpoint,
-            method=method,
-            status_code=status_code
+            status_code=status_code,
+            installation_id=installation_id
         ).inc()
     
-    def set_container_resource(
-        self,
-        container_id: str,
-        resource_type: str,
-        value: float
+    @staticmethod
+    def record_security_violation(
+        violation_type: str,
+        severity: str = "medium"
     ) -> None:
-        """Update container resource usage"""
-        CONTAINER_RESOURCES.labels(
-            resource_type=resource_type,
-            container_id=container_id
-        ).set(value)
+        """Record security violation"""
+        SECURITY_VIOLATIONS.labels(
+            type=violation_type,
+            severity=severity
+        ).inc()
+        
+        logger.warning(
+            "Security violation detected",
+            type=violation_type,
+            severity=severity
+        )
 
 
 # Global metrics collector
 metrics = MetricsCollector()
-
-
-def setup_monitoring() -> None:
-    """Setup monitoring and metrics collection"""
-    settings = get_settings()
-    
-    # Set application info
-    APP_INFO.info({
-        "version": "1.0.0",
-        "environment": settings.DEBUG and "development" or "production",
-        "features": {
-            "github_app": str(bool(settings.GITHUB_APP_ID)),
-            "openai": str(bool(settings.OPENAI_API_KEY)),
-            "anthropic": str(bool(settings.ANTHROPIC_API_KEY)),
-            "ollama": str(bool(settings.OLLAMA_BASE_URL)),
-        }
-    })
-    
-    logger.info("Metrics collection initialized")
-
-
-def track_execution_time(metric_name: str):
-    """Decorator to track function execution time"""
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = await func(*args, **kwargs)
-                duration = time.time() - start_time
-                
-                # Record success
-                if hasattr(metrics, f"record_{metric_name}"):
-                    getattr(metrics, f"record_{metric_name}")(duration, "success")
-                
-                return result
-            
-            except Exception as e:
-                duration = time.time() - start_time
-                
-                # Record failure
-                if hasattr(metrics, f"record_{metric_name}"):
-                    getattr(metrics, f"record_{metric_name}")(duration, "error")
-                
-                raise
-        
-        return wrapper
-    return decorator

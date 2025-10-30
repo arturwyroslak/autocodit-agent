@@ -1,441 +1,357 @@
 /**
  * AutoCodit Agent - GitHub MCP Server
  * 
- * Model Context Protocol server for GitHub operations
+ * Model Context Protocol server for GitHub repository operations.
+ * Provides tools for file operations, branch management, and GitHub API interactions.
  */
 
-const { MCPServer } = require('@modelcontextprotocol/sdk/server');
-const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio');
-const { Octokit } = require('octokit');
+const http = require('http');
+const url = require('url');
 const fs = require('fs').promises;
 const path = require('path');
+const { spawn } = require('child_process');
+const { promisify } = require('util');
+
+const exec = promisify(require('child_process').exec);
 
 // Configuration
-const config = {
-    port: process.env.MCP_SERVER_PORT || 2301,
-    githubToken: process.env.GITHUB_TOKEN,
-    installationId: process.env.GITHUB_INSTALLATION_ID,
-    logLevel: process.env.LOG_LEVEL || 'INFO'
+const CONFIG = {
+    port: parseInt(process.env.MCP_PORT || '2301'),
+    workspace: '/workspace/repository',
+    githubToken: process.env.GITHUB_TOKEN || '',
+    repository: process.env.GITHUB_REPOSITORY || '',
+    branch: process.env.GITHUB_BRANCH || 'main',
+    sessionId: process.env.SESSION_ID || '',
+    taskId: process.env.TASK_ID || ''
 };
 
-// Logging
-function log(level, message, data = {}) {
-    console.log(JSON.stringify({
+// Logging utility
+function log(level, message, metadata = {}) {
+    const logEntry = {
         timestamp: new Date().toISOString(),
         level,
-        component: 'github-mcp-server',
         message,
-        ...data
-    }));
+        component: 'github-mcp-server',
+        session_id: CONFIG.sessionId,
+        task_id: CONFIG.taskId,
+        ...metadata
+    };
+    
+    console.log(JSON.stringify(logEntry));
 }
 
-class GitHubMCPServer {
-    constructor() {
-        this.server = new MCPServer(
-            {
-                name: 'github-mcp-server',
-                version: '1.0.0'
-            },
-            {
-                capabilities: {
-                    tools: {},
-                    resources: {},
-                    prompts: {}
+// MCP Tool implementations
+const tools = {
+    async list_files(params = {}) {
+        const targetPath = params.path || '.';
+        const fullPath = path.join(CONFIG.workspace, targetPath);
+        
+        try {
+            const files = [];
+            
+            async function walkDir(dir, relativePath = '') {
+                const entries = await fs.readdir(dir, { withFileTypes: true });
+                
+                for (const entry of entries) {
+                    const entryPath = path.join(relativePath, entry.name);
+                    
+                    if (entry.isDirectory()) {
+                        // Skip common ignore directories
+                        if (['.git', 'node_modules', '__pycache__', '.pytest_cache', 'target', 'dist'].includes(entry.name)) {
+                            continue;
+                        }
+                        await walkDir(path.join(dir, entry.name), entryPath);
+                    } else {
+                        files.push(entryPath);
+                    }
                 }
             }
-        );
-        
-        this.octokit = null;
-        this.setupToolHandlers();
-    }
-    
-    async initialize() {
-        // Initialize GitHub client
-        if (config.githubToken) {
-            this.octokit = new Octokit({ auth: config.githubToken });
-        } else {
-            log('WARN', 'No GitHub token provided, some operations will fail');
-        }
-        
-        log('INFO', 'GitHub MCP Server initialized');
-    }
-    
-    setupToolHandlers() {
-        // File operations
-        this.server.setRequestHandler('tools/call', 'list_files', async (request) => {
-            return await this.listFiles(request.params);
-        });
-        
-        this.server.setRequestHandler('tools/call', 'read_file', async (request) => {
-            return await this.readFile(request.params);
-        });
-        
-        this.server.setRequestHandler('tools/call', 'write_file', async (request) => {
-            return await this.writeFile(request.params);
-        });
-        
-        // Git operations
-        this.server.setRequestHandler('tools/call', 'create_branch', async (request) => {
-            return await this.createBranch(request.params);
-        });
-        
-        this.server.setRequestHandler('tools/call', 'commit_changes', async (request) => {
-            return await this.commitChanges(request.params);
-        });
-        
-        // Repository analysis
-        this.server.setRequestHandler('tools/call', 'analyze_repository', async (request) => {
-            return await this.analyzeRepository(request.params);
-        });
-        
-        // Code search
-        this.server.setRequestHandler('tools/call', 'search_code', async (request) => {
-            return await this.searchCode(request.params);
-        });
-        
-        log('INFO', 'Tool handlers registered');
-    }
-    
-    async listFiles(params) {
-        const { path: dirPath = '.' } = params;
-        
-        try {
-            const fullPath = path.resolve('/workspace/repo', dirPath);
-            const entries = await fs.readdir(fullPath, { withFileTypes: true });
             
-            const files = entries.map(entry => ({
-                name: entry.name,
-                type: entry.isDirectory() ? 'directory' : 'file',
-                path: path.join(dirPath, entry.name)
-            }));
+            await walkDir(fullPath);
             
-            log('DEBUG', `Listed ${files.length} files in ${dirPath}`);
+            log('DEBUG', `Listed ${files.length} files`, { path: targetPath });
             
-            return {
-                content: [{
-                    type: 'text',
-                    text: JSON.stringify({ files, path: dirPath })
-                }]
-            };
-            
+            return { files };
         } catch (error) {
-            log('ERROR', 'Failed to list files', { path: dirPath, error: error.message });
-            throw new Error(`Failed to list files: ${error.message}`);
+            log('ERROR', `Failed to list files: ${error.message}`, { path: targetPath });
+            throw error;
         }
-    }
+    },
     
-    async readFile(params) {
-        const { path: filePath } = params;
-        
-        if (!filePath) {
-            throw new Error('File path is required');
-        }
+    async read_file(params) {
+        const { file_path } = params;
+        const fullPath = path.join(CONFIG.workspace, file_path);
         
         try {
-            const fullPath = path.resolve('/workspace/repo', filePath);
             const content = await fs.readFile(fullPath, 'utf8');
             
-            log('DEBUG', `Read file: ${filePath}`, { size: content.length });
+            log('DEBUG', `Read file: ${file_path}`, { size: content.length });
             
-            return {
-                content: [{
-                    type: 'text',
-                    text: content
-                }]
-            };
-            
+            return { content, file_path, size: content.length };
         } catch (error) {
-            log('ERROR', 'Failed to read file', { path: filePath, error: error.message });
-            throw new Error(`Failed to read file: ${error.message}`);
+            log('ERROR', `Failed to read file: ${error.message}`, { file_path });
+            throw error;
         }
-    }
+    },
     
-    async writeFile(params) {
-        const { path: filePath, content, message = 'Update file via AutoCodit Agent' } = params;
-        
-        if (!filePath || content === undefined) {
-            throw new Error('File path and content are required');
-        }
+    async write_file(params) {
+        const { file_path, content } = params;
+        const fullPath = path.join(CONFIG.workspace, file_path);
         
         try {
-            const fullPath = path.resolve('/workspace/repo', filePath);
-            
             // Ensure directory exists
             await fs.mkdir(path.dirname(fullPath), { recursive: true });
             
             // Write file
             await fs.writeFile(fullPath, content, 'utf8');
             
-            log('INFO', `Wrote file: ${filePath}`, { size: content.length });
+            log('INFO', `Wrote file: ${file_path}`, { size: content.length });
             
-            return {
-                content: [{
-                    type: 'text',
-                    text: JSON.stringify({
-                        success: true,
-                        path: filePath,
-                        size: content.length
-                    })
-                }]
-            };
-            
+            return { file_path, size: content.length, success: true };
         } catch (error) {
-            log('ERROR', 'Failed to write file', { path: filePath, error: error.message });
-            throw new Error(`Failed to write file: ${error.message}`);
+            log('ERROR', `Failed to write file: ${error.message}`, { file_path });
+            throw error;
         }
-    }
+    },
     
-    async analyzeRepository(params) {
-        log('INFO', 'Analyzing repository structure');
+    async execute_command(params) {
+        const { command, timeout = 300 } = params;
         
         try {
-            const analysis = {
-                structure: await this.analyzeStructure(),
-                languages: await this.analyzeLanguages(),
-                dependencies: await this.analyzeDependencies(),
-                tests: await this.analyzeTests(),
-                documentation: await this.analyzeDocumentation()
-            };
+            log('INFO', `Executing command: ${command}`);
             
-            log('INFO', 'Repository analysis completed', {
-                files_analyzed: analysis.structure.total_files,
-                languages: analysis.languages.map(l => l.name)
+            const { stdout, stderr } = await exec(command, {
+                cwd: CONFIG.workspace,
+                timeout: timeout * 1000,
+                maxBuffer: 1024 * 1024 // 1MB
             });
             
+            log('DEBUG', 'Command executed successfully', { command });
+            
             return {
-                content: [{
-                    type: 'text',
-                    text: JSON.stringify(analysis, null, 2)
-                }]
+                exit_code: 0,
+                stdout: stdout.trim(),
+                stderr: stderr.trim(),
+                success: true
             };
-            
         } catch (error) {
-            log('ERROR', 'Repository analysis failed', { error: error.message });
-            throw new Error(`Repository analysis failed: ${error.message}`);
-        }
-    }
-    
-    async analyzeStructure() {
-        const structure = {
-            directories: [],
-            files: [],
-            total_files: 0,
-            total_directories: 0
-        };
-        
-        async function walkDir(dir, relativePath = '') {
-            const entries = await fs.readdir(dir, { withFileTypes: true });
+            log('ERROR', `Command failed: ${error.message}`, { command });
             
-            for (const entry of entries) {
-                const fullPath = path.join(dir, entry.name);
-                const relPath = path.join(relativePath, entry.name);
-                
-                // Skip common ignore patterns
-                if (entry.name.startsWith('.') || 
-                    entry.name === 'node_modules' ||
-                    entry.name === '__pycache__' ||
-                    entry.name === 'target' ||
-                    entry.name === 'dist' ||
-                    entry.name === 'build') {
-                    continue;
-                }
-                
-                if (entry.isDirectory()) {
-                    structure.directories.push(relPath);
-                    structure.total_directories++;
-                    await walkDir(fullPath, relPath);
-                } else {
-                    const stats = await fs.stat(fullPath);
-                    structure.files.push({
-                        path: relPath,
-                        size: stats.size,
-                        extension: path.extname(entry.name),
-                        modified: stats.mtime
-                    });
-                    structure.total_files++;
-                }
-            }
+            return {
+                exit_code: error.code || 1,
+                stdout: error.stdout || '',
+                stderr: error.stderr || error.message,
+                success: false
+            };
         }
-        
-        await walkDir('/workspace/repo');
-        return structure;
-    }
+    },
     
-    async analyzeLanguages() {
-        // Simple language detection based on file extensions
-        const languageMap = {
-            '.js': 'JavaScript',
-            '.ts': 'TypeScript',
-            '.py': 'Python',
-            '.go': 'Go',
-            '.java': 'Java',
-            '.rs': 'Rust',
-            '.cpp': 'C++',
-            '.c': 'C',
-            '.cs': 'C#',
-            '.php': 'PHP',
-            '.rb': 'Ruby',
-            '.swift': 'Swift',
-            '.kt': 'Kotlin'
-        };
+    async create_branch(params) {
+        const { branch_name, base_branch = 'main' } = params;
         
-        const languageCounts = {};
-        
-        // Count files by extension
-        const structure = await this.analyzeStructure();
-        
-        for (const file of structure.files) {
-            const lang = languageMap[file.extension];
-            if (lang) {
-                languageCounts[lang] = (languageCounts[lang] || 0) + 1;
-            }
-        }
-        
-        // Convert to sorted array
-        return Object.entries(languageCounts)
-            .map(([name, count]) => ({ name, count, percentage: (count / structure.total_files * 100).toFixed(1) }))
-            .sort((a, b) => b.count - a.count);
-    }
-    
-    async analyzeDependencies() {
-        const dependencies = [];
-        
-        // Check package.json
         try {
-            const packageJson = JSON.parse(
-                await fs.readFile('/workspace/repo/package.json', 'utf8')
+            // Create new branch
+            await exec(`git checkout -b ${branch_name}`, { cwd: CONFIG.workspace });
+            
+            log('INFO', `Created branch: ${branch_name}`, { base_branch });
+            
+            return { branch_name, base_branch, success: true };
+        } catch (error) {
+            log('ERROR', `Failed to create branch: ${error.message}`, { branch_name });
+            throw error;
+        }
+    },
+    
+    async create_commit(params) {
+        const { branch_name, commit_message, files = [] } = params;
+        
+        try {
+            // Switch to branch
+            await exec(`git checkout ${branch_name}`, { cwd: CONFIG.workspace });
+            
+            // Stage files
+            if (files.length > 0) {
+                const filePaths = files.map(f => f.file_path).join(' ');
+                await exec(`git add ${filePaths}`, { cwd: CONFIG.workspace });
+            } else {
+                await exec('git add .', { cwd: CONFIG.workspace });
+            }
+            
+            // Create commit
+            await exec(`git commit -m "${commit_message}"`, { cwd: CONFIG.workspace });
+            
+            // Get commit SHA
+            const { stdout: sha } = await exec('git rev-parse HEAD', { cwd: CONFIG.workspace });
+            
+            log('INFO', `Created commit: ${sha.trim()}`, { branch_name, files_count: files.length });
+            
+            return {
+                sha: sha.trim(),
+                branch_name,
+                commit_message,
+                files_changed: files.length,
+                success: true
+            };
+        } catch (error) {
+            log('ERROR', `Failed to create commit: ${error.message}`, { branch_name });
+            throw error;
+        }
+    },
+    
+    async search_relevant_files(params) {
+        const { query, max_results = 10 } = params;
+        
+        try {
+            // Simple grep-based search
+            const { stdout } = await exec(
+                `grep -r -l "${query}" . --include="*.py" --include="*.js" --include="*.ts" --include="*.java" --include="*.go" | head -${max_results}`,
+                { cwd: CONFIG.workspace }
             );
             
-            const deps = {
-                ...packageJson.dependencies,
-                ...packageJson.devDependencies
-            };
+            const files = stdout.trim().split('\n').filter(f => f);
             
-            dependencies.push({
-                type: 'npm',
-                count: Object.keys(deps).length,
-                packages: Object.keys(deps)
-            });
+            log('DEBUG', `Found ${files.length} relevant files`, { query });
             
+            return { files, query };
         } catch (error) {
-            // No package.json found
+            // No matches found is not an error
+            return { files: [], query };
         }
+    },
+    
+    async validate_syntax(params) {
+        const { file_path } = params;
+        const fullPath = path.join(CONFIG.workspace, file_path);
         
-        // Check requirements.txt
         try {
-            const requirements = await fs.readFile('/workspace/repo/requirements.txt', 'utf8');
-            const packages = requirements.split('\n')
-                .filter(line => line.trim() && !line.startsWith('#'))
-                .map(line => line.split(/[>=<~!]/)[0]);
+            const ext = path.extname(file_path).toLowerCase();
+            let command;
             
-            dependencies.push({
-                type: 'pip',
-                count: packages.length,
-                packages
-            });
+            switch (ext) {
+                case '.py':
+                    command = `python3 -m py_compile ${fullPath}`;
+                    break;
+                case '.js':
+                case '.jsx':
+                    command = `node --check ${fullPath}`;
+                    break;
+                case '.ts':
+                case '.tsx':
+                    command = `npx tsc --noEmit ${fullPath}`;
+                    break;
+                default:
+                    return { valid: true, message: 'Syntax validation not supported for this file type' };
+            }
             
+            await exec(command);
+            
+            return { valid: true, file_path };
         } catch (error) {
-            // No requirements.txt found
+            return {
+                valid: false,
+                file_path,
+                error: error.message
+            };
         }
-        
-        return dependencies;
     }
-    
-    async analyzeTests() {
-        const tests = {
-            frameworks: [],
-            test_files: [],
-            coverage_config: null
-        };
-        
-        // Look for test files and configurations
-        const structure = await this.analyzeStructure();
-        
-        for (const file of structure.files) {
-            const filename = path.basename(file.path);
-            
-            // Test files
-            if (filename.includes('test') || filename.includes('spec') || 
-                file.path.includes('__tests__') || file.path.includes('/tests/')) {
-                tests.test_files.push(file.path);
-            }
-            
-            // Test configurations
-            if (filename === 'jest.config.js' || filename === 'jest.config.json') {
-                tests.frameworks.push('jest');
-            }
-            if (filename === 'vitest.config.js') {
-                tests.frameworks.push('vitest');
-            }
-            if (filename === 'pytest.ini' || filename === 'pyproject.toml') {
-                tests.frameworks.push('pytest');
-            }
-        }
-        
-        return tests;
-    }
-    
-    async analyzeDocumentation() {
-        const docs = {
-            readme: null,
-            documentation_files: [],
-            api_docs: null
-        };
-        
-        const structure = await this.analyzeStructure();
-        
-        for (const file of structure.files) {
-            const filename = path.basename(file.path).toLowerCase();
-            
-            if (filename.startsWith('readme')) {
-                docs.readme = file.path;
-            }
-            
-            if (filename.endsWith('.md') || filename.endsWith('.rst')) {
-                docs.documentation_files.push(file.path);
-            }
-        }
-        
-        return docs;
-    }
-    
-    extractRepoFromUrl(url) {
-        const match = url.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
-        if (match) {
-            return { owner: match[1], repo: match[2] };
-        }
-        throw new Error(`Invalid repository URL: ${url}`);
-    }
-}
+};
 
-// Start the MCP server
-async function main() {
-    const mcpServer = new GitHubMCPServer();
+// HTTP server for MCP protocol
+const server = http.createServer(async (req, res) => {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Content-Type', 'application/json');
+    
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+    
+    const parsedUrl = url.parse(req.url, true);
+    const pathname = parsedUrl.pathname;
     
     try {
-        await mcpServer.initialize();
+        if (req.method === 'GET' && pathname === '/health') {
+            res.writeHead(200);
+            res.end(JSON.stringify({ status: 'healthy', server: 'github-mcp' }));
+            return;
+        }
         
-        // Create transport
-        const transport = new StdioServerTransport();
-        await mcpServer.server.connect(transport);
+        if (req.method === 'GET' && pathname === '/tools') {
+            res.writeHead(200);
+            res.end(JSON.stringify({
+                tools: Object.keys(tools).map(name => ({
+                    name,
+                    description: `GitHub MCP tool: ${name}`
+                }))
+            }));
+            return;
+        }
         
-        log('INFO', 'GitHub MCP Server started successfully');
+        if (req.method === 'POST' && pathname.startsWith('/tools/')) {
+            const toolName = pathname.replace('/tools/', '');
+            
+            if (!tools[toolName]) {
+                res.writeHead(404);
+                res.end(JSON.stringify({ error: `Tool not found: ${toolName}` }));
+                return;
+            }
+            
+            // Parse request body
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+            
+            req.on('end', async () => {
+                try {
+                    const params = body ? JSON.parse(body) : {};
+                    const result = await tools[toolName](params);
+                    
+                    res.writeHead(200);
+                    res.end(JSON.stringify(result));
+                } catch (error) {
+                    log('ERROR', `Tool execution failed: ${error.message}`, { tool: toolName });
+                    
+                    res.writeHead(500);
+                    res.end(JSON.stringify({ error: error.message }));
+                }
+            });
+            
+            return;
+        }
+        
+        // Not found
+        res.writeHead(404);
+        res.end(JSON.stringify({ error: 'Not found' }));
         
     } catch (error) {
-        log('ERROR', 'Failed to start GitHub MCP Server', { error: error.message });
-        process.exit(1);
+        log('ERROR', `Server error: ${error.message}`);
+        
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'Internal server error' }));
     }
-}
+});
 
-// Handle graceful shutdown
+// Start server
+server.listen(CONFIG.port, '0.0.0.0', () => {
+    log('INFO', `GitHub MCP Server listening on port ${CONFIG.port}`);
+});
+
+// Graceful shutdown
 process.on('SIGTERM', () => {
-    log('INFO', 'GitHub MCP Server shutting down');
-    process.exit(0);
+    log('INFO', 'Received SIGTERM, shutting down GitHub MCP Server');
+    server.close(() => {
+        process.exit(0);
+    });
 });
 
 process.on('SIGINT', () => {
-    log('INFO', 'GitHub MCP Server shutting down');
-    process.exit(0);
+    log('INFO', 'Received SIGINT, shutting down GitHub MCP Server');
+    server.close(() => {
+        process.exit(0);
+    });
 });
-
-main();

@@ -7,89 +7,117 @@
 
 set -euo pipefail
 
-# Configuration from environment
-TASK_ID="${TASK_ID:-}"
-SESSION_ID="${SESSION_ID:-}"
-REPOSITORY_URL="${REPOSITORY_URL:-}"
-TASK_DESCRIPTION="${TASK_DESCRIPTION:-}"
-ACTION_TYPE="${ACTION_TYPE:-plan}"
-AGENT_CONFIG="${AGENT_CONFIG:-{}}"
-API_ENDPOINT="${API_ENDPOINT:-}"
-GITHUB_INSTALLATION_ID="${GITHUB_INSTALLATION_ID:-}"
-LOG_LEVEL="${LOG_LEVEL:-INFO}"
+# Configuration
+AGENT_HOME=${AGENT_HOME:-/home/agent/.autocodit}
+LOG_FILE="$AGENT_HOME/logs/execution.log"
+PID_FILE="$AGENT_HOME/agent.pid"
+MCP_PORT=${MCP_SERVER_PORT:-2301}
+API_ENDPOINT=${API_ENDPOINT:-http://api:8000}
+
+# Required environment variables
+require_env() {
+    local var_name=$1
+    local var_value=$(eval echo "\$${var_name}")
+    
+    if [[ -z "$var_value" ]]; then
+        echo "ERROR: Required environment variable $var_name is not set" >&2
+        exit 1
+    fi
+}
 
 # Logging function
 log() {
     local level=$1
     shift
-    echo "{\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"level\": \"$level\", \"component\": \"agent-executor\", \"message\": \"$*\", \"task_id\": \"$TASK_ID\", \"session_id\": \"$SESSION_ID\"}"
+    local message="$*"
+    local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    
+    # Structured JSON logging
+    echo "{\"timestamp\":\"$timestamp\",\"level\":\"$level\",\"message\":\"$message\",\"component\":\"agent-executor\",\"session_id\":\"$SESSION_ID\",\"task_id\":\"$TASK_ID\"}" | tee -a "$LOG_FILE"
 }
 
-# Error handler
-error_exit() {
-    log "ERROR" "$1"
-    exit 1
-}
-
-# Signal handlers for graceful shutdown
-trap 'log "INFO" "Received SIGTERM, shutting down gracefully"; exit 0' TERM
-trap 'log "INFO" "Received SIGINT, shutting down gracefully"; exit 0' INT
-
-# Validate required environment variables
-[ -z "$TASK_ID" ] && error_exit "TASK_ID is required"
-[ -z "$SESSION_ID" ] && error_exit "SESSION_ID is required"
-[ -z "$REPOSITORY_URL" ] && error_exit "REPOSITORY_URL is required"
-[ -z "$API_ENDPOINT" ] && error_exit "API_ENDPOINT is required"
-
-log "INFO" "Starting AutoCodit Agent Executor" 
-
-# Create workspace structure
-mkdir -p /workspace/{repo,cache,artifacts,logs}
-cd /workspace
-
-# Start health check endpoint
-log "INFO" "Starting health check endpoint"
-node /usr/local/lib/health-server.js &
-HEALTH_PID=$!
-
-# Clone repository
-log "INFO" "Cloning repository: $REPOSITORY_URL"
-if ! git clone "$REPOSITORY_URL" repo; then
-    error_exit "Failed to clone repository"
-fi
-
-cd repo
-
-# Detect project type and setup environment
-log "INFO" "Detecting project structure"
-node /usr/local/lib/project-detector.js > /workspace/project-info.json
-
-PROJECT_TYPE=$(cat /workspace/project-info.json | jq -r '.type')
-log "INFO" "Detected project type: $PROJECT_TYPE"
-
-# Start MCP servers based on project type
-log "INFO" "Starting MCP servers"
-/usr/local/lib/mcp-servers/github/bin/start &
-GITHUB_MCP_PID=$!
-
-if [ "$PROJECT_TYPE" = "web" ] || [ "$PROJECT_TYPE" = "frontend" ]; then
-    /usr/local/lib/mcp-servers/playwright/bin/start &
-    PLAYWRIGHT_MCP_PID=$!
-fi
-
-# Wait for MCP servers to start
-sleep 3
-
-# Start main agent process
-log "INFO" "Starting main agent process"
-exec node /usr/local/lib/agent-main.js
-
-# Cleanup on exit (this won't run due to exec, but kept for reference)
+# Cleanup function
 cleanup() {
-    log "INFO" "Cleaning up processes"
-    [ -n "${GITHUB_MCP_PID:-}" ] && kill $GITHUB_MCP_PID 2>/dev/null || true
-    [ -n "${PLAYWRIGHT_MCP_PID:-}" ] && kill $PLAYWRIGHT_MCP_PID 2>/dev/null || true
-    [ -n "${HEALTH_PID:-}" ] && kill $HEALTH_PID 2>/dev/null || true
+    log "INFO" "Starting cleanup process..."
+    
+    # Stop MCP servers
+    if [[ -f "$AGENT_HOME/mcp.pid" ]]; then
+        local mcp_pid=$(cat "$AGENT_HOME/mcp.pid")
+        if kill -0 $mcp_pid 2>/dev/null; then
+            log "INFO" "Stopping MCP server (PID: $mcp_pid)"
+            kill -TERM $mcp_pid
+            sleep 5
+            kill -KILL $mcp_pid 2>/dev/null || true
+        fi
+        rm -f "$AGENT_HOME/mcp.pid"
+    fi
+    
+    # Clean up temporary files
+    rm -rf "$AGENT_HOME/temp/*"
+    
+    # Remove PID file
+    rm -f "$PID_FILE"
+    
+    log "INFO" "Cleanup completed"
 }
 
+# Signal handlers
 trap cleanup EXIT
+trap 'log "WARN" "Received SIGTERM, shutting down..."; exit 0' TERM
+trap 'log "WARN" "Received SIGINT, shutting down..."; exit 0' INT
+
+# Main execution function
+main() {
+    log "INFO" "AutoCodit Agent Executor starting..."
+    
+    # Create PID file
+    echo $$ > "$PID_FILE"
+    
+    # Validate environment
+    require_env SESSION_ID
+    require_env TASK_ID
+    require_env REPOSITORY_URL
+    require_env TASK_DESCRIPTION
+    require_env ACTION_TYPE
+    
+    log "INFO" "Environment validated"
+    log "INFO" "Session ID: $SESSION_ID"
+    log "INFO" "Task ID: $TASK_ID"
+    log "INFO" "Repository: $REPOSITORY_URL"
+    log "INFO" "Action Type: $ACTION_TYPE"
+    
+    # Start MCP servers
+    log "INFO" "Starting MCP servers..."
+    /opt/scripts/start-mcp-servers.sh &
+    MCP_PID=$!
+    echo $MCP_PID > "$AGENT_HOME/mcp.pid"
+    
+    # Wait for MCP servers to be ready
+    log "INFO" "Waiting for MCP servers to be ready..."
+    for i in {1..30}; do
+        if curl -s -f http://localhost:$MCP_PORT/health >/dev/null 2>&1; then
+            log "INFO" "MCP servers are ready"
+            break
+        fi
+        
+        if [[ $i -eq 30 ]]; then
+            log "ERROR" "MCP servers failed to start within timeout"
+            exit 1
+        fi
+        
+        sleep 2
+    done
+    
+    # Clone repository
+    log "INFO" "Cloning repository: $REPOSITORY_URL"
+    /opt/scripts/clone-repository.sh
+    
+    # Execute main agent logic
+    log "INFO" "Starting agent execution..."
+    /opt/scripts/execute-agent.py
+    
+    log "INFO" "Agent execution completed successfully"
+}
+
+# Run main function
+main "$@"

@@ -6,6 +6,7 @@ from .endpoints.agents import router as agents_router
 from .endpoints.users import router as users_router
 from .endpoints.repositories import router as repositories_router
 from .endpoints.tasks_summary import router as tasks_summary_router
+from .endpoints.sessions_summary import router as sessions_summary_router
 
 api_router = APIRouter()
 
@@ -25,6 +26,12 @@ api_router.include_router(
 api_router.include_router(
     sessions_router,
     prefix="/sessions", 
+    tags=["sessions"]
+)
+
+api_router.include_router(
+    sessions_summary_router,
+    prefix="/sessions",
     tags=["sessions"]
 )
 

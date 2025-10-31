@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { useToast } from '@/components/ui/use-toast'
 
 export const metadata: Metadata = {
   title: 'AutoCodit Agent',
@@ -11,9 +12,20 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Client hook cannot be used in a server component, so render Toaster in a client subcomponent
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Client-only toaster */}
+        <ToasterPortal />
+      </body>
     </html>
   )
+}
+
+'use client'
+function ToasterPortal() {
+  const { Toaster } = useToast()
+  return <Toaster />
 }

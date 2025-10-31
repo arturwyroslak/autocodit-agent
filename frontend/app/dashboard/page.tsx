@@ -3,6 +3,7 @@ import LiveSessions from '@/components/live-sessions'
 import SystemMetrics from '@/components/system-metrics'
 import TaskCreator from '@/components/task-creator'
 import SummaryCards from '@/components/summary-cards'
+import SessionsSummaryCards from '@/components/sessions-summary-cards'
 
 export default async function DashboardPage() {
   return (
@@ -15,6 +16,7 @@ export default async function DashboardPage() {
       </div>
 
       <SummaryCards />
+      <SessionsSummaryCards />
 
       <TaskCreator />
 

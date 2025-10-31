@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { postJSON } from '@/lib/api'
+import { useToast } from '@/components/ui/use-toast'
 
 export default function TaskCreator() {
   const [open, setOpen] = useState(false)
@@ -15,6 +16,7 @@ export default function TaskCreator() {
   const [priority, setPriority] = useState('normal')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { add } = useToast()
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,10 +30,14 @@ export default function TaskCreator() {
         action_type: actionType,
         priority,
       })
+      add({ title: 'Task created', description: `${actionType} – ${repository}` })
       setOpen(false)
       setTitle(''); setDescription(''); setRepository('')
+      // try to refresh task lists by reloading location (simple approach)
+      if (typeof window !== 'undefined') window.location.reload()
     } catch (e: any) {
       setError(e?.message || 'Failed to create task')
+      add({ title: 'Failed to create task', description: e?.message || '', variant: 'destructive' })
     } finally {
       setSubmitting(false)
     }

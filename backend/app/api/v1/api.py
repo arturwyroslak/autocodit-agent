@@ -5,12 +5,19 @@ from .endpoints.sessions import router as sessions_router
 from .endpoints.agents import router as agents_router
 from .endpoints.users import router as users_router
 from .endpoints.repositories import router as repositories_router
+from .endpoints.tasks_summary import router as tasks_summary_router
 
 api_router = APIRouter()
 
 # Include all endpoint routers
 api_router.include_router(
     tasks_router,
+    prefix="/tasks",
+    tags=["tasks"]
+)
+
+api_router.include_router(
+    tasks_summary_router,
     prefix="/tasks",
     tags=["tasks"]
 )

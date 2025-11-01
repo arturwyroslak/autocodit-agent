@@ -1,5 +1,7 @@
 # Default values for autocodit-agent.
 
+host: "autocodit.example.com"
+
 image:
   repository: ghcr.io/your-org/autocodit-agent-api
   tag: latest
@@ -27,22 +29,43 @@ service:
 
 env:
   GITHUB_APP_ID: ""
-  GITHUB_PRIVATE_KEY: ""
-  GITHUB_WEBHOOK_SECRET: ""
-  OPENAI_API_KEY: ""
-  ANTHROPIC_API_KEY: ""
+  GITHUB_PRIVATE_KEY: "REPLACE_ME"
+  GITHUB_WEBHOOK_SECRET: "REPLACE_ME"
+  OPENAI_API_KEY: "REPLACE_ME"
+  ANTHROPIC_API_KEY: "REPLACE_ME"
   DATABASE_URL: postgresql://autocodit:password@postgres:5432/autocodit_agent
   REDIS_URL: redis://redis:6379/0
 
 resources:
   api:
     limits:
-      cpu: 1000m
-      memory: 1Gi
+      cpu: "2"
+      memory: 2Gi
     requests:
       cpu: 200m
       memory: 256Mi
   frontend:
+    limits:
+      cpu: "1"
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  runnerManager:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  worker:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  beat:
     limits:
       cpu: 500m
       memory: 512Mi

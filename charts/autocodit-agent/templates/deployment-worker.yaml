@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autocodit-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: autocodit-worker
+  template:
+    metadata:
+      labels:
+        app: autocodit-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/your-org/autocodit-agent-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.env.DATABASE_URL | quote }}
+            - name: REDIS_URL
+              value: {{ .Values.env.REDIS_URL | quote }}
+            - name: OPENAI_API_KEY
+              value: {{ .Values.env.OPENAI_API_KEY | quote }}
+            - name: ANTHROPIC_API_KEY
+              value: {{ .Values.env.ANTHROPIC_API_KEY | quote }}
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+            requests:
+              cpu: 200m
+              memory: 256Mi

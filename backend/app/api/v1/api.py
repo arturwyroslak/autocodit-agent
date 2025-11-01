@@ -7,6 +7,8 @@ from .endpoints.users import router as users_router
 from .endpoints.repositories import router as repositories_router
 from .endpoints.tasks_summary import router as tasks_summary_router
 from .endpoints.sessions_summary import router as sessions_summary_router
+from .endpoints.github import router as github_router
+from .endpoints.copilot import router as copilot_router
 
 api_router = APIRouter()
 
@@ -53,6 +55,18 @@ api_router.include_router(
     tags=["repositories"]
 )
 
+api_router.include_router(
+    github_router,
+    prefix="/github",
+    tags=["github"]
+)
+
+api_router.include_router(
+    copilot_router,
+    prefix="/copilot",
+    tags=["copilot"]
+)
+
 
 @api_router.get("/")
 async def api_root():
@@ -64,7 +78,9 @@ async def api_root():
             "sessions": "/api/v1/sessions",
             "agents": "/api/v1/agents", 
             "users": "/api/v1/users",
-            "repositories": "/api/v1/repositories"
+            "repositories": "/api/v1/repositories",
+            "github": "/api/v1/github",
+            "copilot": "/api/v1/copilot",
         },
         "documentation": "/docs"
     }

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: autocodit-agent
+version: 0.1.0
+description: Helm chart for deploying AutoCodit Agent (API, Frontend, Runner)
+type: application

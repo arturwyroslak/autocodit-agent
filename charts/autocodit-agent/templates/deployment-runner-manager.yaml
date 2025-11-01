@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autocodit-runner-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autocodit-runner-manager
+  template:
+    metadata:
+      labels:
+        app: autocodit-runner-manager
+    spec:
+      containers:
+        - name: runner-manager
+          image: ghcr.io/your-org/autocodit-agent-runner:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: API_ENDPOINT
+              value: http://autocodit-agent-api:8000
+            - name: MAX_CONCURRENT_RUNNERS
+              value: "10"
+            - name: RUNNER_POOL_SIZE
+              value: "5"
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+            requests:
+              cpu: 200m
+              memory: 256Mi

@@ -1,11 +1,14 @@
-# Documentation
+# AutoCodit Agent Documentation
 
-This directory will contain full documentation for the AutoCodit Agent project.
+This folder contains the complete documentation for deploying, operating, and extending AutoCodit Agent.
 
 - Architecture
-- Installation
-- Configuration
-- Security
-- Monitoring
-- MCP Development
-- Agent Profiles
+- Installation (Docker Compose & Helm)
+- Configuration (Environment, Secrets)
+- GitHub App Setup
+- Copilot-like Jobs API
+- Runner & Worker Execution Model
+- WebSocket Protocol & UI
+- Monitoring & Observability
+- Security & Compliance
+- Troubleshooting

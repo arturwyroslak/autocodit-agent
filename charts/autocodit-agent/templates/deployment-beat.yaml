@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autocodit-beat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autocodit-beat
+  template:
+    metadata:
+      labels:
+        app: autocodit-beat
+    spec:
+      containers:
+        - name: beat
+          image: ghcr.io/your-org/autocodit-agent-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=info"]
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.env.DATABASE_URL | quote }}
+            - name: REDIS_URL
+              value: {{ .Values.env.REDIS_URL | quote }}
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi

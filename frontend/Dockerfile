@@ -13,11 +13,16 @@ WORKDIR /app
 # Copy package manifests
 COPY package.json package-lock.json* ./
 
-# Install prod deps for smaller image
-RUN npm ci --omit=dev
+# Install deps (fallback if lock or omit not supported)
+RUN --mount=type=cache,target=/root/.npm \
+    if [ -f package-lock.json ]; then \
+      npm ci --omit=dev || npm ci --only=production || npm install --production; \
+    else \
+      npm install --production; \
+    fi
 
-# Rebuild native deps if needed
-RUN npm rebuild esbuild
+# Rebuild native deps if needed (guard if present)
+RUN npm rebuild esbuild || true
 
 # Development stage (optional)
 FROM base AS development

@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autocodit-agent-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autocodit-agent-api
+  template:
+    metadata:
+      labels:
+        app: autocodit-agent-api
+    spec:
+      containers:
+        - name: api
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.apiPort }}
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.env.DATABASE_URL | quote }}
+            - name: REDIS_URL
+              value: {{ .Values.env.REDIS_URL | quote }}
+            - name: GITHUB_APP_ID
+              value: {{ .Values.env.GITHUB_APP_ID | quote }}
+            - name: GITHUB_PRIVATE_KEY
+              value: {{ .Values.env.GITHUB_PRIVATE_KEY | quote }}
+            - name: GITHUB_WEBHOOK_SECRET
+              value: {{ .Values.env.GITHUB_WEBHOOK_SECRET | quote }}
+            - name: OPENAI_API_KEY
+              value: {{ .Values.env.OPENAI_API_KEY | quote }}
+            - name: ANTHROPIC_API_KEY
+              value: {{ .Values.env.ANTHROPIC_API_KEY | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.apiPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.apiPort }}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources.api | nindent 12 }}

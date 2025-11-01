@@ -1,2 +1,14 @@
 {
-  
+  "name": "autocodit-agent",
+  "private": true,
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "docker compose up -d",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f --tail=200",
+    "db:migrate": "bash scripts/migrate.sh",
+    "setup": "bash scripts/setup-dev.sh",
+    "build:cli": "bash scripts/build-cli.sh"
+  }
+}

@@ -1,11 +1,14 @@
+'use client'
+
+import * as React from 'react'
+import { useEffect, useState } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { getJSON } from '@/lib/api'
 
-async function fetchTasks() {
+async function fetchTasksOnce() {
   try {
     const data = await getJSON<{ items?: any[]; data?: any[] }>('/api/v1/tasks')
-    // Backend może zwrócić {items:[...]} lub tablicę; normalizujemy
     const items = Array.isArray(data) ? (data as any) : (data.items || data.data || [])
     return items
   } catch (e) {
@@ -28,8 +31,20 @@ function statusVariant(s?: string) {
   }
 }
 
-export default async function TaskOverview() {
-  const tasks = await fetchTasks()
+export default function TaskOverview() {
+  const [tasks, setTasks] = useState<any[]>([])
+
+  async function load() {
+    const items = await fetchTasksOnce()
+    setTasks(items)
+  }
+
+  useEffect(() => {
+    load()
+    const onRefresh = () => load()
+    window.addEventListener('tasks:refresh', onRefresh as any)
+    return () => window.removeEventListener('tasks:refresh', onRefresh as any)
+  }, [])
 
   return (
     <div className="rounded-lg border bg-card">

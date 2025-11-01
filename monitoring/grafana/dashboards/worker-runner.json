@@ -1,0 +1,24 @@
+{
+  "annotations": {"list": []},
+  "panels": [
+    {
+      "title": "Worker Tasks Processed",
+      "type": "graph",
+      "targets": [
+        {"expr": "sum(rate(celery_tasks_total[5m]))", "legendFormat": "tasks/s"}
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "title": "Runner Active Sessions",
+      "type": "stat",
+      "targets": [
+        {"expr": "sum(autocodit_sessions_active)"}
+      ],
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+    }
+  ],
+  "schemaVersion": 36,
+  "title": "AutoCodit Worker/Runner",
+  "version": 1
+}

@@ -13,8 +13,21 @@ until PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d postgr
   echo -n "."
 done
 
-echo "\nApplying database init.sql and schema.sql..."
-psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f /app/database/init.sql
-psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f /app/database/schema.sql
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+echo -e "\nApplying database init.sql and schema parts..."
+psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/database/init.sql"
+
+for part in "$ROOT_DIR/database/schema.part1.sql" \
+            "$ROOT_DIR/database/schema.part2.sql" \
+            "$ROOT_DIR/database/schema.part3.sql"; do
+  if [[ -f "$part" ]]; then
+    echo "Applying $(basename "$part")..."
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$part"
+  else
+    echo "Missing $part" >&2
+    exit 1
+  fi
+done
 
 echo "Database migrations applied successfully."

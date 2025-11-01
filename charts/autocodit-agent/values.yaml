@@ -1,0 +1,51 @@
+# Default values for autocodit-agent.
+
+image:
+  repository: ghcr.io/your-org/autocodit-agent-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+frontend:
+  image:
+    repository: ghcr.io/your-org/autocodit-agent-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  env:
+    NEXT_PUBLIC_API_URL: http://autocodit-agent-api:8000
+    NEXT_PUBLIC_WS_URL: ws://autocodit-agent-api:8000
+
+runner:
+  image:
+    repository: ghcr.io/your-org/autocodit-agent-runner
+    tag: latest
+    pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  apiPort: 8000
+  frontendPort: 3000
+
+env:
+  GITHUB_APP_ID: ""
+  GITHUB_PRIVATE_KEY: ""
+  GITHUB_WEBHOOK_SECRET: ""
+  OPENAI_API_KEY: ""
+  ANTHROPIC_API_KEY: ""
+  DATABASE_URL: postgresql://autocodit:password@postgres:5432/autocodit_agent
+  REDIS_URL: redis://redis:6379/0
+
+resources:
+  api:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  frontend:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi

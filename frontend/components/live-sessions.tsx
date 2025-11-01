@@ -42,7 +42,12 @@ export default function LiveSessions({ refreshMs = 5000 }: { refreshMs?: number 
   useEffect(() => {
     load()
     const id = setInterval(load, refreshMs)
-    return () => clearInterval(id)
+    const onRefresh = () => load()
+    window.addEventListener('sessions:refresh', onRefresh as any)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('sessions:refresh', onRefresh as any)
+    }
   }, [refreshMs])
 
   return (

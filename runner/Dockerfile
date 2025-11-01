@@ -56,12 +56,11 @@ RUN pip3 install --no-cache-dir \
 # Install Playwright browsers
 RUN playwright install --with-deps chromium
 
-# Install Node.js dependencies globally
-RUN npm install -g \
-    typescript ts-node \
-    @types/node \
-    prettier eslint \
-    jest @types/jest
+# Install Node.js dependencies globally (best-effort; continue on non-critical failures)
+RUN npm set fund false && npm set audit false \
+ && npm install -g typescript ts-node @types/node || true \
+ && npm install -g prettier eslint || true \
+ && npm install -g jest @types/jest || true
 
 # Set working directory
 WORKDIR /workspace

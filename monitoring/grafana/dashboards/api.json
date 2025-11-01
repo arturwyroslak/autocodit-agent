@@ -1,0 +1,63 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "Prometheus",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "API Requests per Second",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"autocodit-api\"}[5m]))",
+          "legendFormat": "rps"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "title": "API Error Rate",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"autocodit-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"autocodit-api\"}[5m]))",
+          "legendFormat": "errors"
+        }
+      ],
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "title": "Task Success Rate (30d)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "avg_over_time(autocodit_tasks_success_rate[30d])"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 8, "w": 6, "h": 6}
+    },
+    {
+      "title": "Tokens Used",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "sum(rate(autocodit_tokens_used_total[5m]))",
+          "legendFormat": "tokens/s"
+        }
+      ],
+      "gridPos": {"x": 6, "y": 8, "w": 18, "h": 6}
+    }
+  ],
+  "schemaVersion": 36,
+  "title": "AutoCodit API",
+  "version": 1
+}

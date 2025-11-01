@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: autocodit-agent
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | default "autocodit.local" }}
+      secretName: autocodit-tls
+  rules:
+    - host: {{ .Values.ingress.host | default "autocodit.local" }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: autocodit-agent-api
+                port:
+                  number: {{ .Values.service.apiPort }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: autocodit-agent-frontend
+                port:
+                  number: {{ .Values.service.frontendPort }}

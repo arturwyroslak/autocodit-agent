@@ -14,11 +14,14 @@ PID_FILE="$AGENT_HOME/agent.pid"
 MCP_PORT=${MCP_SERVER_PORT:-2301}
 API_ENDPOINT=${API_ENDPOINT:-http://api:8000}
 
+# Ensure directory exists for logs & PID
+mkdir -p "$AGENT_HOME/logs"
+mkdir -p "$AGENT_HOME/temp"
+
 # Required environment variables
 require_env() {
     local var_name=$1
     local var_value=$(eval echo "\$${var_name}")
-    
     if [[ -z "$var_value" ]]; then
         echo "ERROR: Required environment variable $var_name is not set" >&2
         exit 1
@@ -31,15 +34,12 @@ log() {
     shift
     local message="$*"
     local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
-    
-    # Structured JSON logging
     echo "{\"timestamp\":\"$timestamp\",\"level\":\"$level\",\"message\":\"$message\",\"component\":\"agent-executor\",\"session_id\":\"$SESSION_ID\",\"task_id\":\"$TASK_ID\"}" | tee -a "$LOG_FILE"
 }
 
 # Cleanup function
 cleanup() {
     log "INFO" "Starting cleanup process..."
-    
     # Stop MCP servers
     if [[ -f "$AGENT_HOME/mcp.pid" ]]; then
         local mcp_pid=$(cat "$AGENT_HOME/mcp.pid")
@@ -51,13 +51,10 @@ cleanup() {
         fi
         rm -f "$AGENT_HOME/mcp.pid"
     fi
-    
     # Clean up temporary files
     rm -rf "$AGENT_HOME/temp/*"
-    
     # Remove PID file
     rm -f "$PID_FILE"
-    
     log "INFO" "Cleanup completed"
 }
 
@@ -69,29 +66,24 @@ trap 'log "WARN" "Received SIGINT, shutting down..."; exit 0' INT
 # Main execution function
 main() {
     log "INFO" "AutoCodit Agent Executor starting..."
-    
     # Create PID file
     echo $$ > "$PID_FILE"
-    
     # Validate environment
     require_env SESSION_ID
     require_env TASK_ID
     require_env REPOSITORY_URL
     require_env TASK_DESCRIPTION
     require_env ACTION_TYPE
-    
     log "INFO" "Environment validated"
     log "INFO" "Session ID: $SESSION_ID"
     log "INFO" "Task ID: $TASK_ID"
     log "INFO" "Repository: $REPOSITORY_URL"
     log "INFO" "Action Type: $ACTION_TYPE"
-    
     # Start MCP servers
     log "INFO" "Starting MCP servers..."
     /opt/scripts/start-mcp-servers.sh &
     MCP_PID=$!
     echo $MCP_PID > "$AGENT_HOME/mcp.pid"
-    
     # Wait for MCP servers to be ready
     log "INFO" "Waiting for MCP servers to be ready..."
     for i in {1..30}; do
@@ -99,23 +91,18 @@ main() {
             log "INFO" "MCP servers are ready"
             break
         fi
-        
         if [[ $i -eq 30 ]]; then
             log "ERROR" "MCP servers failed to start within timeout"
             exit 1
         fi
-        
         sleep 2
     done
-    
     # Clone repository
     log "INFO" "Cloning repository: $REPOSITORY_URL"
     /opt/scripts/clone-repository.sh
-    
     # Execute main agent logic
     log "INFO" "Starting agent execution..."
     /opt/scripts/execute-agent.py
-    
     log "INFO" "Agent execution completed successfully"
 }
 

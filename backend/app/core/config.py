@@ -6,9 +6,9 @@ and environment variable validation.
 """
 
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, Optional, Union
 
-from pydantic import Field, validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     WEBHOOK_VERIFICATION_TOKEN: str = Field(default="development-webhook-token", description="Webhook verification token")
     
     # GitHub App Configuration - Now with defaults
-    GITHUB_APP_ID: int = Field(default=0, description="GitHub App ID")
+    GITHUB_APP_ID: Union[int, str] = Field(default=0, description="GitHub App ID")
     GITHUB_PRIVATE_KEY: str = Field(default="", description="GitHub App private key")
     GITHUB_WEBHOOK_SECRET: str = Field(default="development-webhook-secret", description="GitHub webhook secret")
     GITHUB_BOT_LOGIN: str = Field(default="autocodit-bot", description="GitHub bot username")
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     FIREWALL_ENABLED: bool = Field(default=True, description="Enable firewall")
     FIREWALL_MODE: str = Field(default="strict", description="Firewall mode")
     FIREWALL_LOG_BLOCKED: bool = Field(default=True, description="Log blocked requests")
-    FIREWALL_ALLOWLIST_DOMAINS: str = Field(
+    FIREWALL_ALLOWLIST_DOMAINS: Union[str, List[str]] = Field(
         default="github.com,npmjs.org,pypi.org,docker.io",
         description="Comma-separated list of allowed domains"
     )
@@ -124,33 +124,51 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = Field(default=["*"], description="CORS allowed origins")
     ALLOWED_HOSTS: List[str] = Field(default=["*"], description="Allowed hosts")
     
-    @validator("CORS_ORIGINS", "ALLOWED_HOSTS", pre=True)
+    @field_validator("GITHUB_APP_ID", mode="before")
+    @classmethod
+    def parse_github_app_id(cls, v):
+        """Parse GITHUB_APP_ID, handling empty strings"""
+        if v == "" or v is None:
+            return 0
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 0
+    
+    @field_validator("CORS_ORIGINS", "ALLOWED_HOSTS", mode="before")
+    @classmethod
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",")]
         return v
     
-    @validator("FIREWALL_ALLOWLIST_DOMAINS", pre=True)
+    @field_validator("FIREWALL_ALLOWLIST_DOMAINS", mode="before")
+    @classmethod
     def parse_allowlist_domains(cls, v):
-        if isinstance(v, str):
-            return [domain.strip() for domain in v.split(",")]
+        """Parse allowlist domains from string or list"""
+        if isinstance(v, list):
+            # If it's already a list, convert back to string
+            return ",".join(v)
         return v
     
-    @validator("LOG_LEVEL")
+    @field_validator("LOG_LEVEL")
+    @classmethod
     def validate_log_level(cls, v):
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if v.upper() not in valid_levels:
             raise ValueError(f"Invalid log level. Must be one of: {valid_levels}")
         return v.upper()
     
-    @validator("FIREWALL_MODE", "CONTENT_FILTER_MODE")
+    @field_validator("FIREWALL_MODE", "CONTENT_FILTER_MODE")
+    @classmethod
     def validate_security_mode(cls, v):
         valid_modes = ["permissive", "moderate", "strict"]
         if v.lower() not in valid_modes:
             raise ValueError(f"Invalid security mode. Must be one of: {valid_modes}")
         return v.lower()
     
-    @validator("CONTAINER_ISOLATION_MODE")
+    @field_validator("CONTAINER_ISOLATION_MODE")
+    @classmethod
     def validate_isolation_mode(cls, v):
         valid_modes = ["docker", "gvisor", "firecracker"]
         if v.lower() not in valid_modes:

@@ -14,7 +14,7 @@ import structlog
 from workers.celery_app import celery_app
 from app.services.runner_service import RunnerService
 from app.core.monitoring import metrics
-from app.websocket.manager import websocket_manager
+from app.websocket.manager import manager
 
 logger = structlog.get_logger()
 
@@ -88,7 +88,7 @@ async def _update_system_metrics_async():
     
     try:
         # Update WebSocket connection count
-        ws_stats = websocket_manager.get_connection_stats()
+        ws_stats = manager.get_connection_stats()
         metrics.set_websocket_connections(ws_stats["total_connections"])
         
         # TODO: Update other system metrics

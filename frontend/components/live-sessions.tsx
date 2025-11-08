@@ -42,6 +42,20 @@ function statusIcon(s?: string) {
   }
 }
 
+function ClientTime({ dateString }: { dateString: string }) {
+  const [client, setClient] = useState(false)
+  useEffect(() => setClient(true), [])
+  if (!client) return <span suppressHydrationWarning={true}>–</span>
+  return <>{new Date(dateString).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>
+}
+
+function ClientTimeLastUpdate({ date }: { date: Date }) {
+  const [client, setClient] = useState(false)
+  useEffect(() => setClient(true), [])
+  if (!client) return <span suppressHydrationWarning={true}>–</span>
+  return <>{date.toLocaleTimeString()}</>
+}
+
 export default function LiveSessions({ refreshMs = 5000 }: { refreshMs?: number }) {
   const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,7 +110,7 @@ export default function LiveSessions({ refreshMs = 5000 }: { refreshMs?: number 
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                Last updated: {lastUpdate.toLocaleTimeString()}
+                Last updated: <ClientTimeLastUpdate date={lastUpdate} />
               </p>
             </div>
           </div>
@@ -158,12 +172,7 @@ export default function LiveSessions({ refreshMs = 5000 }: { refreshMs?: number 
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {s.started_at ? new Date(s.started_at).toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }) : '-'}
+                  {s.started_at ? <ClientTime dateString={s.started_at} /> : '-'}
                 </TableCell>
                 <TableCell className="text-right">
                   <span className="px-2 py-1 rounded-md bg-muted/50 text-xs font-mono font-medium">

@@ -2,6 +2,7 @@ services:
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
+    container_name: autocodit-agent-db
     environment:
       - POSTGRES_DB=autocodit_agent
       - POSTGRES_USER=autocodit
@@ -26,6 +27,7 @@ services:
   # Redis Cache & Message Broker
   redis:
     image: redis:7-alpine
+    container_name: autocodit-agent-redis
     ports:
       - "6378:6379"
     volumes:
@@ -47,6 +49,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       target: development
+    container_name: autocodit-agent-api
     ports:
       - "8001:8000"
     environment:
@@ -87,6 +90,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: development
+    container_name: autocodit-agent-frontend
     ports:
       - "3001:3000"
     environment:
@@ -106,9 +110,13 @@ services:
 
 volumes:
   runner-workspace:
+    driver: local
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
 
 networks:
   autocodit:
     driver: bridge
+    name: autocodit-agent-network

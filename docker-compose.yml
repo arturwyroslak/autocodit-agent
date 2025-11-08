@@ -1,4 +1,46 @@
 services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=autocodit_agent
+      - POSTGRES_USER=autocodit
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql
+    networks:
+      - autocodit
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autocodit -d autocodit_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6378:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - autocodit
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
   # Core API Service
   api:
     build:
@@ -27,7 +69,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-      - /var/run/docker.sock:/var/run/docker.sock  # For runner management
+      - /var/run/docker.sock:/var/run/docker.sock
       - runner-workspace:/workspace
     networks:
       - autocodit
@@ -64,6 +106,8 @@ services:
 
 volumes:
   runner-workspace:
+  postgres_data:
+  redis_data:
 
 networks:
   autocodit:

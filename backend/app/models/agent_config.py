@@ -1,7 +1,11 @@
 from sqlalchemy import String, Text, JSON, Boolean, Float, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 from .base import Base
+
+if TYPE_CHECKING:
+    from .user import User
+    from .repository import Repository
 
 
 class AgentConfig(Base):
@@ -36,6 +40,9 @@ class AgentConfig(Base):
     # Owner relationship
     user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("user.id"))
     user: Mapped[Optional["User"]] = relationship("User", back_populates="agent_configs")
+    
+    # Repository relationship
+    repositories: Mapped[List["Repository"]] = relationship("Repository", back_populates="agent_config")
     
     def __repr__(self) -> str:
         return f"<AgentConfig(name='{self.name}', model='{self.model_primary}')>"

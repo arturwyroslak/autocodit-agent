@@ -56,6 +56,7 @@ services:
       - DATABASE_URL=postgresql://autocodit:password@db:5432/autocodit_agent
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - JWT_SECRET=dev-jwt-secret-key-change-in-production
       - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
@@ -79,6 +80,73 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Celery Worker
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+      target: development
+    container_name: autocodit-agent-worker
+    environment:
+      - DATABASE_URL=postgresql://autocodit:password@db:5432/autocodit_agent
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LOG_LEVEL=DEBUG
+      - C_FORCE_ROOT=1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-workspace:/workspace
+    networks:
+      - autocodit
+    restart: unless-stopped
+    command: celery -A workers.celery_app worker --loglevel=debug --concurrency=2
+
+  # Code Execution Runner
+  runner:
+    build:
+      context: ./runner
+      dockerfile: Dockerfile
+      target: development
+    container_name: autocodit-agent-runner
+    ports:
+      - "2301:2301"
+    environment:
+      - AGENT_MODE=development
+      - MCP_SERVER_PORT=2301
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - runner-workspace:/workspace
+      - ./runner:/app
+    networks:
+      - autocodit
+    restart: unless-stopped
+    privileged: false
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2301/health"]
       interval: 30s
       timeout: 10s
       retries: 3

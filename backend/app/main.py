@@ -10,7 +10,7 @@ from .core.logging import setup_logging
 from .core.monitoring import setup_monitoring
 from .api.v1.api import api_router
 from .github.webhook import router as github_router
-from .websocket.manager import router as websocket_router
+from .websocket.manager.manager import router as websocket_router
 from .middleware.auth import AuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.logging import LoggingMiddleware
@@ -18,66 +18,50 @@ from .middleware.logging import LoggingMiddleware
 settings = get_settings()
 logger = structlog.get_logger()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
     logger.info("Starting AutoCodit Agent API")
-    
     # Setup logging
     setup_logging()
-    
     # Setup monitoring
     setup_monitoring()
-    
     # Create database tables
     await create_tables()
-    
     # Initialize services
     await initialize_services()
-    
     logger.info("AutoCodit Agent API started successfully")
-    
     yield
-    
     # Shutdown
     logger.info("Shutting down AutoCodit Agent API")
     await cleanup_services()
-
 
 async def initialize_services():
     """Initialize application services"""
     # Initialize AI service
     from .services.ai_service import ai_orchestrator
     logger.info("AI orchestrator initialized")
-    
     # Initialize GitHub service
     from .services.github_service import github_service
     logger.info("GitHub service initialized")
-    
     # Initialize runner service
     from .services.runner_service import runner_service
     logger.info("Runner service initialized")
-    
     # Start Celery workers (in production this would be separate)
     if not settings.DEBUG:
         from .workers.celery_app import celery_app
         logger.info("Celery worker pool initialized")
-
 
 async def cleanup_services():
     """Cleanup application services"""
     # Close AI service connections
     from .services.ai_service import ai_orchestrator
     await ai_orchestrator.close()
-    
     # Cleanup active sessions
     from .services.runner_service import runner_service
     await runner_service.cleanup_all_sessions()
-    
     logger.info("Services cleanup completed")
-
 
 # Create FastAPI application
 app = FastAPI(
@@ -108,7 +92,6 @@ app.include_router(api_router, prefix="/api/v1")
 app.include_router(github_router, prefix="/api/v1/github")
 app.include_router(websocket_router, prefix="/ws")
 
-
 # Root endpoint
 @app.get("/")
 async def root():
@@ -123,7 +106,6 @@ async def root():
             "permissions": ["contents", "issues", "pull_requests"]
         }
     }
-
 
 # Health check endpoint
 @app.get("/health")
@@ -141,17 +123,14 @@ async def health_check():
         }
     }
 
-
 # Metrics endpoint (if enabled)
 if settings.METRICS_ENABLED:
     from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-    
     @app.get("/metrics")
     async def metrics():
         """Prometheus metrics endpoint"""
         from fastapi.responses import Response
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
 
 # Global exception handler
 @app.exception_handler(Exception)
@@ -164,7 +143,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         error=str(exc),
         exc_info=exc
     )
-    
     return {
         "error": "Internal server error",
         "detail": str(exc) if settings.DEBUG else "An error occurred",

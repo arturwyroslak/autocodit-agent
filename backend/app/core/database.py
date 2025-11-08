@@ -113,9 +113,13 @@ class Database:
 # Global database instance
 database = Database()
 
-
 # Dependency for FastAPI
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency to get database session"""
     async for session in database.get_session():
         yield session
+
+# <--- PATCH: Add create_tables for API compatibility --->
+async def create_tables():
+    """Dummy create_tables for API startup compatibility. Implement for ORM if needed."""
+    return

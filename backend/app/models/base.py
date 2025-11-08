@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy import Column, DateTime, String, Text
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import as_declarative
+from sqlalchemy.orm import as_declarative, Mapped, mapped_column
 
 
 @as_declarative()
@@ -30,3 +30,20 @@ class Base:
     
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(id={self.id})>"
+
+
+class TimestampMixin:
+    """Mixin for adding created_at and updated_at timestamps"""
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )

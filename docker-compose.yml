@@ -62,4 +62,9 @@ services:
       - autocodit
     restart: unless-stopped
 
-# ... (pozostała część docker-compose.yml bez zmian)
+volumes:
+  runner-workspace:
+
+networks:
+  autocodit:
+    driver: bridge

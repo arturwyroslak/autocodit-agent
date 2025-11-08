@@ -4,7 +4,6 @@ import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { getJSON } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { ClipboardList, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -63,8 +62,7 @@ export function TasksSidebar() {
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
-      
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-2 space-y-1">
           {tasks.map((task) => (
             <div
@@ -99,7 +97,7 @@ export function TasksSidebar() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }

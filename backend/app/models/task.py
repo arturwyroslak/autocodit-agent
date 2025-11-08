@@ -6,7 +6,7 @@ Task management and execution tracking model.
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, ENUM
@@ -15,9 +15,15 @@ import uuid
 
 from app.models.base import Base
 
+if TYPE_CHECKING:
+    from .user import User
+    from .session import Session
+    from .repository import Repository
+
 
 class TaskStatus(str, Enum):
     """Task execution status"""
+    PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -59,15 +65,16 @@ class Task(Base):
     description = Column(Text, nullable=True)
     
     # GitHub context
-    repository = Column(String(255), nullable=False, index=True)
+    repository_id = Column(String, ForeignKey("repositories.id"), nullable=True, index=True)
     issue_number = Column(Integer, nullable=True, index=True)
-    pr_number = Column(Integer, nullable=True, index=True)
+    pull_request_number = Column(Integer, nullable=True, index=True)
     comment_id = Column(String(255), nullable=True)
     branch_name = Column(String(255), nullable=True)
+    base_branch = Column(String(255), default="main", nullable=False)
     
     # Task configuration
     action_type = Column(ENUM(ActionType), default=ActionType.PLAN, nullable=False)
-    status = Column(ENUM(TaskStatus), default=TaskStatus.QUEUED, nullable=False, index=True)
+    status = Column(ENUM(TaskStatus), default=TaskStatus.PENDING, nullable=False, index=True)
     priority = Column(ENUM(TaskPriority), default=TaskPriority.NORMAL, nullable=False)
     
     # Progress tracking
@@ -80,10 +87,13 @@ class Task(Base):
     
     # GitHub App context
     github_installation_id = Column(Integer, nullable=True)
+    github_event_type = Column(String(50), nullable=True)
+    github_event_data = Column(JSON, default=dict, nullable=False)
     triggered_by = Column(String(50), nullable=True)  # issue_assignment, comment_command, api_request
     
     # Agent configuration
     agent_config = Column(JSON, default=dict, nullable=False)
+    auto_merge = Column(Boolean, default=False, nullable=False)
     
     # Resource usage
     tokens_used = Column(Integer, default=0, nullable=False)
@@ -106,6 +116,8 @@ class Task(Base):
     # Relationships
     user = relationship("User", back_populates="tasks")
     session = relationship("Session", back_populates="task", uselist=False)
+    repository = relationship("Repository", back_populates="tasks")
+    sessions = relationship("Session", back_populates="tasks", foreign_keys="Session.task_id")
     
     def __repr__(self) -> str:
         return f"<Task(id={self.id}, title={self.title}, status={self.status})>"

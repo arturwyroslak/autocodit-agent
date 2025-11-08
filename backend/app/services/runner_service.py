@@ -19,6 +19,7 @@ class RunnerService:
     
     def __init__(self):
         self.active_sessions: Dict[str, Dict[str, Any]] = {}
+        logger.info("Runner Service initialized")
     
     async def create_session(
         self,
@@ -126,6 +127,19 @@ class RunnerService:
         except Exception as e:
             logger.error(f"Error stopping session: {e}")
             return False
+    
+    async def cleanup_all_sessions(self):
+        """Cleanup all active sessions on shutdown"""
+        logger.info(f"Cleaning up {len(self.active_sessions)} active sessions")
+        
+        for session_id in list(self.active_sessions.keys()):
+            try:
+                await self.stop_session(session_id)
+            except Exception as e:
+                logger.error(f"Error cleaning up session {session_id}: {e}")
+        
+        self.active_sessions.clear()
+        logger.info("All sessions cleaned up")
     
     async def _start_container_execution(self, session: Session):
         """Start container for session execution"""
@@ -262,3 +276,10 @@ class RunnerService:
         logger.info(f"Cleaned up {cleanup_count} finished sessions")
         
         return cleanup_count
+
+
+# Global singleton instance
+runner_service = RunnerService()
+
+
+__all__ = ['RunnerService', 'runner_service']

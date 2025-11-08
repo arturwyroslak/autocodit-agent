@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SimpleSelect } from '@/components/ui/select'
 import { Settings as SettingsIcon, Save, User, Bell, Palette, Shield } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -110,17 +110,17 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Notification Level</label>
-                <Select value={notifications} onValueChange={setNotifications}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All notifications</SelectItem>
-                    <SelectItem value="important">Important only</SelectItem>
-                    <SelectItem value="errors">Errors only</SelectItem>
-                    <SelectItem value="none">None</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SimpleSelect
+                  value={notifications}
+                  onChange={setNotifications}
+                  options={[
+                    { value: 'all', label: 'All notifications' },
+                    { value: 'important', label: 'Important only' },
+                    { value: 'errors', label: 'Errors only' },
+                    { value: 'none', label: 'None' },
+                  ]}
+                  placeholder="Select notification level"
+                />
               </div>
             </CardContent>
           </Card>
@@ -137,16 +137,16 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Theme</label>
-                <Select value={theme} onValueChange={setTheme}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="dark">Dark</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SimpleSelect
+                  value={theme}
+                  onChange={setTheme}
+                  options={[
+                    { value: 'light', label: 'Light' },
+                    { value: 'dark', label: 'Dark' },
+                    { value: 'system', label: 'System' },
+                  ]}
+                  placeholder="Select theme"
+                />
               </div>
             </CardContent>
           </Card>

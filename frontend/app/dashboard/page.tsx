@@ -1,43 +1,41 @@
 'use client'
 import * as React from 'react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SimpleSelect } from '@/components/ui/select'
 import { Sparkles, GitBranch, FileText, Loader2 } from 'lucide-react'
-import { postJSON } from '@/lib/api'
+import { getJSON, postJSON } from '@/lib/api'
 import { useToast } from '@/components/ui/use-toast'
 
-const mockRepositories = [
-  'arturwyroslak/autocodit-agent',
-  'arturwyroslak/project-alpha',
-  'arturwyroslak/project-beta',
-]
-
-const mockBranches = {
-  'arturwyroslak/autocodit-agent': ['main', 'develop', 'feature/ui-improvements'],
-  'arturwyroslak/project-alpha': ['main', 'staging', 'production'],
-  'arturwyroslak/project-beta': ['main', 'dev'],
-}
-
 export default function DashboardPage() {
+  const [repositories, setRepositories] = useState<string[]>([])
+  const [branches, setBranches] = useState<string[]>([])
   const [selectedRepo, setSelectedRepo] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const { add } = useToast()
 
-  const availableBranches = selectedRepo ? mockBranches[selectedRepo as keyof typeof mockBranches] || [] : []
+  useEffect(() => {
+    getJSON<{ items: { full_name: string }[] }>('/api/v1/repositories')
+      .then(data => setRepositories(data.items.map(r => r.full_name)))
+      .catch(() => setRepositories([]))
+  }, [])
+
+  useEffect(() => {
+    if (!selectedRepo) { setBranches([]); return }
+    const [owner, repo] = selectedRepo.split('/')
+    getJSON<{ items: { name: string }[] }>(`/api/v1/repositories/${owner}/${repo}/branches`)
+      .then(data => setBranches(data.items.map(b => b.name)))
+      .catch(() => setBranches([]))
+  }, [selectedRepo])
 
   async function handleCreateTask(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedRepo || !selectedBranch || !description) {
-      add({
-        title: 'Validation Error',
-        description: 'Please fill in all fields',
-        variant: 'destructive',
-      })
+      add({ title: 'Validation Error', description: 'Please fill in all fields', variant: 'destructive' })
       return
     }
     setSubmitting(true)
@@ -50,20 +48,11 @@ export default function DashboardPage() {
         action_type: 'plan',
         priority: 'normal',
       })
-      add({
-        title: 'Task Created',
-        description: `Task created for ${selectedRepo} on ${selectedBranch}`,
-      })
+      add({ title: 'Task Created', description: `Task created for ${selectedRepo} on ${selectedBranch}` })
       setDescription('')
-      setTimeout(() => {
-        if (typeof window !== 'undefined') window.location.reload()
-      }, 1000)
+      setTimeout(() => { if (typeof window !== 'undefined') window.location.reload() }, 1000)
     } catch (e: any) {
-      add({
-        title: 'Failed to create task',
-        description: e?.message || 'An error occurred',
-        variant: 'destructive',
-      })
+      add({ title: 'Failed to create task', description: e?.message || 'An error occurred', variant: 'destructive' })
     } finally {
       setSubmitting(false)
     }
@@ -98,7 +87,6 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateTask} className="space-y-6">
-                {/* Repository Selection */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     <GitBranch className="w-4 h-4" />
@@ -107,16 +95,12 @@ export default function DashboardPage() {
                   </label>
                   <SimpleSelect
                     value={selectedRepo}
-                    onChange={(value) => {
-                      setSelectedRepo(value)
-                      setSelectedBranch('')
-                    }}
-                    options={mockRepositories.map(r => ({ label: r, value: r }))}
+                    onChange={value => { setSelectedRepo(value); setSelectedBranch('') }}
+                    options={repositories.map(r => ({ label: r, value: r }))}
                     placeholder="Select a repository"
                     className="h-12"
                   />
                 </div>
-                {/* Branch Selection */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     <GitBranch className="w-4 h-4" />
@@ -126,13 +110,12 @@ export default function DashboardPage() {
                   <SimpleSelect
                     value={selectedBranch}
                     onChange={setSelectedBranch}
-                    options={availableBranches.map(b => ({ label: b, value: b }))}
+                    options={branches.map(b => ({ label: b, value: b }))}
                     placeholder={selectedRepo ? "Select a branch" : "Select repository first"}
                     disabled={!selectedRepo}
                     className="h-12"
                   />
                 </div>
-                {/* Task Description */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     <FileText className="w-4 h-4" />
@@ -141,7 +124,7 @@ export default function DashboardPage() {
                   </label>
                   <textarea
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={e => setDescription(e.target.value)}
                     placeholder="Describe what you want the agent to do...\n\nExample:\n- Fix the authentication bug in the login page\n- Add dark mode support to the dashboard\n- Optimize database queries for better performance"
                     className="w-full min-h-[200px] px-4 py-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                     required
@@ -150,16 +133,11 @@ export default function DashboardPage() {
                     Be specific and clear about what you want to achieve
                   </p>
                 </div>
-                {/* Submit Button */}
                 <div className="flex justify-end gap-3 pt-4">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setSelectedRepo('')
-                      setSelectedBranch('')
-                      setDescription('')
-                    }}
+                    onClick={() => { setSelectedRepo(''); setSelectedBranch(''); setDescription('') }}
                     disabled={submitting}
                   >
                     Clear

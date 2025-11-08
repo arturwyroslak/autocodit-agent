@@ -9,78 +9,34 @@ from .endpoints.tasks_summary import router as tasks_summary_router
 from .endpoints.sessions_summary import router as sessions_summary_router
 from .endpoints.github import router as github_router
 from .endpoints.copilot import router as copilot_router
+from .endpoints.health import router as health_router
 
 api_router = APIRouter()
 
-# Include all endpoint routers
-api_router.include_router(
-    tasks_router,
-    prefix="/tasks",
-    tags=["tasks"]
-)
-
-api_router.include_router(
-    tasks_summary_router,
-    prefix="/tasks",
-    tags=["tasks"]
-)
-
-api_router.include_router(
-    sessions_router,
-    prefix="/sessions", 
-    tags=["sessions"]
-)
-
-api_router.include_router(
-    sessions_summary_router,
-    prefix="/sessions",
-    tags=["sessions"]
-)
-
-api_router.include_router(
-    agents_router,
-    prefix="/agents",
-    tags=["agents"]
-)
-
-api_router.include_router(
-    users_router,
-    prefix="/users",
-    tags=["users"]
-)
-
-api_router.include_router(
-    repositories_router,
-    prefix="/repositories",
-    tags=["repositories"]
-)
-
-api_router.include_router(
-    github_router,
-    prefix="/github",
-    tags=["github"]
-)
-
-api_router.include_router(
-    copilot_router,
-    prefix="/copilot",
-    tags=["copilot"]
-)
-
+api_router.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
+api_router.include_router(tasks_summary_router, prefix="/tasks", tags=["tasks"])
+api_router.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
+api_router.include_router(sessions_summary_router, prefix="/sessions", tags=["sessions"])
+api_router.include_router(agents_router, prefix="/agents", tags=["agents"])
+api_router.include_router(users_router, prefix="/users", tags=["users"])
+api_router.include_router(repositories_router, prefix="/repositories", tags=["repositories"])
+api_router.include_router(github_router, prefix="/github", tags=["github"])
+api_router.include_router(copilot_router, prefix="/copilot", tags=["copilot"])
+api_router.include_router(health_router, prefix="/endpoints/health", tags=["health"])
 
 @api_router.get("/")
 async def api_root():
-    """API v1 root endpoint"""
     return {
         "message": "AutoCodit Agent API v1",
         "endpoints": {
             "tasks": "/api/v1/tasks",
             "sessions": "/api/v1/sessions",
-            "agents": "/api/v1/agents", 
+            "agents": "/api/v1/agents",
             "users": "/api/v1/users",
             "repositories": "/api/v1/repositories",
             "github": "/api/v1/github",
             "copilot": "/api/v1/copilot",
+            "health": "/api/v1/endpoints/health"
         },
         "documentation": "/docs"
     }

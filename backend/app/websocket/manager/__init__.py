@@ -1,2 +1,2 @@
-# This file intentionally left empty — do not re-export any routers, managers, or functions here.
-# Always import from .websocket.manager (for router etc). Pyright/mypy IDEs may show warnings, but runtime will work.
+# Explicitly export router and broadcast_task_update for absolute import compatibility
+from .manager import router, broadcast_task_update

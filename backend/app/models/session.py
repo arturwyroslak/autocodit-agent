@@ -6,7 +6,7 @@ Execution session tracking for containerized runners.
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, ENUM
@@ -14,6 +14,10 @@ from sqlalchemy.orm import relationship
 import uuid
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from .user import User
+    from .task import Task
 
 
 class SessionStatus(str, Enum):
@@ -83,10 +87,12 @@ class Session(Base):
     
     # Foreign keys
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True, index=True)
     
     # Relationships
     user = relationship("User", back_populates="sessions")
-    task = relationship("Task", back_populates="session", uselist=False)
+    task = relationship("Task", back_populates="session", uselist=False, foreign_keys=[task_id])
+    tasks = relationship("Task", back_populates="sessions", foreign_keys="Task.session_id")
     
     def __repr__(self) -> str:
         return f"<Session(id={self.id}, status={self.status}, container_id={self.container_id})>"

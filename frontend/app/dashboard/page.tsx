@@ -1,16 +1,14 @@
 'use client'
-
 import * as React from 'react'
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SimpleSelect } from '@/components/ui/select'
 import { Sparkles, GitBranch, FileText, Loader2 } from 'lucide-react'
 import { postJSON } from '@/lib/api'
 import { useToast } from '@/components/ui/use-toast'
 
-// Mock data - replace with API calls
 const mockRepositories = [
   'arturwyroslak/autocodit-agent',
   'arturwyroslak/project-alpha',
@@ -42,7 +40,6 @@ export default function DashboardPage() {
       })
       return
     }
-
     setSubmitting(true)
     try {
       await postJSON('/api/v1/tasks', {
@@ -58,7 +55,6 @@ export default function DashboardPage() {
         description: `Task created for ${selectedRepo} on ${selectedBranch}`,
       })
       setDescription('')
-      // Optionally refresh the page or task list
       setTimeout(() => {
         if (typeof window !== 'undefined') window.location.reload()
       }, 1000)
@@ -75,7 +71,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
       <div className="border-b bg-gradient-to-br from-card to-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center gap-3 mb-2">
@@ -87,8 +82,6 @@ export default function DashboardPage() {
           <p className="text-muted-foreground text-lg">Create and manage autonomous coding tasks</p>
         </div>
       </div>
-
-      {/* Main Content */}
       <div className="container mx-auto px-6 py-8">
         <div className="max-w-3xl mx-auto">
           <Card className="shadow-lg border-2">
@@ -103,7 +96,6 @@ export default function DashboardPage() {
                 Select a repository, branch, and describe what you want the agent to do
               </CardDescription>
             </CardHeader>
-            
             <CardContent>
               <form onSubmit={handleCreateTask} className="space-y-6">
                 {/* Repository Selection */}
@@ -113,23 +105,17 @@ export default function DashboardPage() {
                     Repository
                     <span className="text-destructive">*</span>
                   </label>
-                  <Select value={selectedRepo} onValueChange={(value) => {
-                    setSelectedRepo(value)
-                    setSelectedBranch('') // Reset branch when repo changes
-                  }}>
-                    <SelectTrigger className="h-12">
-                      <SelectValue placeholder="Select a repository" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mockRepositories.map((repo) => (
-                        <SelectItem key={repo} value={repo}>
-                          {repo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SimpleSelect
+                    value={selectedRepo}
+                    onChange={(value) => {
+                      setSelectedRepo(value)
+                      setSelectedBranch('')
+                    }}
+                    options={mockRepositories.map(r => ({ label: r, value: r }))}
+                    placeholder="Select a repository"
+                    className="h-12"
+                  />
                 </div>
-
                 {/* Branch Selection */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
@@ -137,24 +123,15 @@ export default function DashboardPage() {
                     Branch
                     <span className="text-destructive">*</span>
                   </label>
-                  <Select 
-                    value={selectedBranch} 
-                    onValueChange={setSelectedBranch}
+                  <SimpleSelect
+                    value={selectedBranch}
+                    onChange={setSelectedBranch}
+                    options={availableBranches.map(b => ({ label: b, value: b }))}
+                    placeholder={selectedRepo ? "Select a branch" : "Select repository first"}
                     disabled={!selectedRepo}
-                  >
-                    <SelectTrigger className="h-12">
-                      <SelectValue placeholder={selectedRepo ? "Select a branch" : "Select repository first"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableBranches.map((branch) => (
-                        <SelectItem key={branch} value={branch}>
-                          {branch}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    className="h-12"
+                  />
                 </div>
-
                 {/* Task Description */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
@@ -173,7 +150,6 @@ export default function DashboardPage() {
                     Be specific and clear about what you want to achieve
                   </p>
                 </div>
-
                 {/* Submit Button */}
                 <div className="flex justify-end gap-3 pt-4">
                   <Button
@@ -210,8 +186,6 @@ export default function DashboardPage() {
               </form>
             </CardContent>
           </Card>
-
-          {/* Info Cards */}
           <div className="grid md:grid-cols-3 gap-4 mt-8">
             <Card className="card-hover">
               <CardHeader>

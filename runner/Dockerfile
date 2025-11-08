@@ -3,7 +3,7 @@
 # =============================================================================
 
 # Base image with essential development tools
-FROM ubuntu:22.04 as base
+FROM ubuntu:22.04 AS base
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -38,7 +38,7 @@ ENV NODE_ENV=production
 RUN groupadd -r agent && useradd -r -g agent -m -s /bin/bash agent
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 # Install development dependencies
 RUN pip3 install --no-cache-dir \
@@ -94,7 +94,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 CMD ["/usr/local/bin/agent-executor"]
 
 # Production stage
-FROM development as production
+FROM development AS production
 
 # Remove development tools to reduce image size
 RUN sudo apt-get remove -y build-essential \

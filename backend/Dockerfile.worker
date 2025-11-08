@@ -3,7 +3,7 @@
 # =============================================================================
 
 # Use same base as main API
-FROM python:3.11-slim-bullseye as base
+FROM python:3.11-slim-bullseye AS base
 
 # Install system dependencies including Docker
 RUN apt-get update \
@@ -30,7 +30,7 @@ COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
@@ -46,7 +46,7 @@ ENV C_FORCE_ROOT=1
 CMD ["celery", "-A", "workers.celery_app", "worker", "--loglevel=debug"]
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 # Create non-root user
 RUN groupadd -r celery && useradd -r -g celery celery

@@ -1,9 +1,26 @@
-# Copilot Mapper Placeholders
-# Minimal placeholder for backend startup.
+from enum import Enum
 
-class CopilotAction:
-    pass
+# CopilotAction must be a Pydantic-compatible type (preferably an Enum)
+class CopilotAction(str, Enum):
+    PLAN = "plan"
+    APPLY = "apply"
+    TEST = "test"
+    REVIEW = "review"
+    FIX = "fix"
+    REFACTOR = "refactor"
+    DOCUMENT = "document"
+    OPTIMIZE = "optimize"
 
-def mapCopilotToTask(*args, **kwargs):
-    # Replace this minimal stub with actual mapping logic
-    return None
+def mapCopilotToTask(action_str: str):
+    # Example mapping
+    mapping = {
+        "plan": CopilotAction.PLAN,
+        "apply": CopilotAction.APPLY,
+        "test": CopilotAction.TEST,
+        "review": CopilotAction.REVIEW,
+        "fix": CopilotAction.FIX,
+        "refactor": CopilotAction.REFACTOR,
+        "document": CopilotAction.DOCUMENT,
+        "optimize": CopilotAction.OPTIMIZE,
+    }
+    return mapping.get(action_str, CopilotAction.PLAN)

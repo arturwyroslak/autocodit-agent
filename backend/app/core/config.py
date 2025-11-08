@@ -27,40 +27,40 @@ class Settings(BaseSettings):
     API_BASE_URL: str = Field(default="http://localhost:8000", description="Base API URL")
     FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL")
     
-    # Security
-    JWT_SECRET: str = Field(..., description="JWT secret key")
-    ENCRYPTION_KEY: str = Field(..., description="Encryption key for sensitive data")
-    WEBHOOK_VERIFICATION_TOKEN: str = Field(..., description="Webhook verification token")
+    # Security - Now with defaults for development
+    JWT_SECRET: str = Field(default="development-jwt-secret-change-in-production", description="JWT secret key")
+    ENCRYPTION_KEY: str = Field(default="development-encryption-key-32ch", description="Encryption key for sensitive data")
+    WEBHOOK_VERIFICATION_TOKEN: str = Field(default="development-webhook-token", description="Webhook verification token")
     
-    # GitHub App Configuration
-    GITHUB_APP_ID: int = Field(..., description="GitHub App ID")
-    GITHUB_PRIVATE_KEY: str = Field(..., description="GitHub App private key")
-    GITHUB_WEBHOOK_SECRET: str = Field(..., description="GitHub webhook secret")
+    # GitHub App Configuration - Now with defaults
+    GITHUB_APP_ID: int = Field(default=0, description="GitHub App ID")
+    GITHUB_PRIVATE_KEY: str = Field(default="", description="GitHub App private key")
+    GITHUB_WEBHOOK_SECRET: str = Field(default="development-webhook-secret", description="GitHub webhook secret")
     GITHUB_BOT_LOGIN: str = Field(default="autocodit-bot", description="GitHub bot username")
     GITHUB_API_URL: str = Field(default="https://api.github.com", description="GitHub API URL")
     
     # Database
-    DATABASE_URL: str = Field(..., description="PostgreSQL database URL")
-    REDIS_URL: str = Field(..., description="Redis URL")
+    DATABASE_URL: str = Field(default="postgresql://autocodit:password@localhost:5432/autocodit_agent", description="PostgreSQL database URL")
+    REDIS_URL: str = Field(default="redis://localhost:6379/0", description="Redis URL")
     
     # Task Queue
-    CELERY_BROKER_URL: str = Field(..., description="Celery broker URL")
-    CELERY_RESULT_BACKEND: Optional[str] = Field(None, description="Celery result backend")
+    CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1", description="Celery broker URL")
+    CELERY_RESULT_BACKEND: Optional[str] = Field(default="redis://localhost:6379/1", description="Celery result backend")
     
     # AI Models
-    OPENAI_API_KEY: Optional[str] = Field(None, description="OpenAI API key")
+    OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API key")
     OPENAI_MODEL_PRIMARY: str = Field(default="gpt-4-turbo-preview", description="Primary OpenAI model")
     OPENAI_MODEL_FALLBACK: str = Field(default="gpt-3.5-turbo-16k", description="Fallback OpenAI model")
     OPENAI_MAX_TOKENS: int = Field(default=4096, description="Max tokens for OpenAI")
     OPENAI_TEMPERATURE: float = Field(default=0.1, description="Temperature for OpenAI")
     
-    ANTHROPIC_API_KEY: Optional[str] = Field(None, description="Anthropic API key")
+    ANTHROPIC_API_KEY: Optional[str] = Field(default=None, description="Anthropic API key")
     ANTHROPIC_MODEL_PRIMARY: str = Field(default="claude-3-sonnet-20240229", description="Primary Anthropic model")
     ANTHROPIC_MAX_TOKENS: int = Field(default=4096, description="Max tokens for Anthropic")
     ANTHROPIC_TEMPERATURE: float = Field(default=0.1, description="Temperature for Anthropic")
     
     # Local LLM (optional)
-    OLLAMA_BASE_URL: Optional[str] = Field(None, description="Ollama base URL")
+    OLLAMA_BASE_URL: Optional[str] = Field(default=None, description="Ollama base URL")
     OLLAMA_MODEL: str = Field(default="codellama:34b", description="Ollama model")
     
     # Runner Configuration
@@ -96,7 +96,7 @@ class Settings(BaseSettings):
     METRICS_ENABLED: bool = Field(default=True, description="Enable metrics")
     METRICS_PORT: int = Field(default=9090, description="Metrics port")
     TRACING_ENABLED: bool = Field(default=True, description="Enable tracing")
-    JAEGER_ENDPOINT: Optional[str] = Field(None, description="Jaeger endpoint")
+    JAEGER_ENDPOINT: Optional[str] = Field(default=None, description="Jaeger endpoint")
     
     # Session Management
     SESSION_TIMEOUT_MINUTES: int = Field(default=60, description="Session timeout in minutes")

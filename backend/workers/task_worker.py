@@ -15,7 +15,7 @@ from workers.celery_app import celery_app
 from app.services.runner_service import RunnerService
 from app.services.task_service import TaskService
 from app.models.task import TaskStatus
-from app.websocket.manager import broadcast_task_update  # ImportError fix: move to manager.py below if needed
+from app.websocket.manager.manager import broadcast_task_update
 from app.core.monitoring import metrics
 
 logger = structlog.get_logger()
@@ -37,11 +37,6 @@ async def _execute_coding_task_async(task_instance, task_id: str, task_config: D
     task_service = TaskService()
     try:
         await task_service.update_task_status(task_id=task_id, status=TaskStatus.RUNNING, progress=0.0)
-        # Next line: fallback import if __init__.py block (import from .manager)
-        try:
-            from app.websocket.manager.manager import broadcast_task_update
-        except ImportError:
-            from app.websocket.manager import broadcast_task_update
         await broadcast_task_update(task_id, {"status": "running", "progress": 0.0, "message": "Task execution started"})
         metrics.record_task_created(action_type=task_config.get("action_type", "unknown"), repository=task_config.get("repository", "unknown"))
         session = await runner_service.create_runner(task_id=task_id, config=task_config)

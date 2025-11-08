@@ -15,7 +15,7 @@ from workers.celery_app import celery_app
 from app.services.runner_service import RunnerService
 from app.services.task_service import TaskService
 from app.models.task import TaskStatus
-from app.websocket.manager.manager import broadcast_task_update
+from app.websocket.manager import broadcast_task_update
 from app.core.monitoring import metrics
 
 logger = structlog.get_logger()

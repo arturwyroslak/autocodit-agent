@@ -7,7 +7,7 @@ contextual information, and multiple output targets.
 
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import structlog
 from pythonjsonlogger import jsonlogger

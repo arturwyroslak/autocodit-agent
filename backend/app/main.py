@@ -10,6 +10,7 @@ from .core.logging import setup_logging
 from .core.monitoring import setup_monitoring
 from .api.v1.api import api_router
 from .github.webhook import router as github_router
+# Import directly from manager.py to avoid circular import with manager/ package
 from .websocket.manager import router as websocket_router
 from .middleware.auth import AuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
